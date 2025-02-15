@@ -33,6 +33,8 @@ const User = sequelize.define('User', {
   role: { type: DataTypes.ENUM("buyer", "seller", "admin"), allowNull: false },
   status: { type: DataTypes.STRING, defaultValue: 'active' }, // active, deactivated
   lastActive: { type: DataTypes.DATE, allowNull: true }, // New field to track last active time
+  createAt: { type: DataTypes.DATE },
+  updateAt: { type: DataTypes.DATE },
   passwordResetOtp: {
     type: DataTypes.STRING,
     allowNull: true,

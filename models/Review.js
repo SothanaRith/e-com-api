@@ -7,10 +7,10 @@ const Review = sequelize.define("Review", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   userId: { type: DataTypes.INTEGER, allowNull: false, references: { model: User, key: "id" } },
   productId: { type: DataTypes.INTEGER, allowNull: false, references: { model: Product, key: "id" } },
-  link: { type: DataTypes.TEXT },
-  type: { type: DataTypes.STRING },
-  status: { type: DataTypes.STRING, defaultValue: "public" },
-  icon: { type: DataTypes.TEXT },
+  comment: { type: DataTypes.TEXT },
+  rating: { type: DataTypes.DECIMAL(10, 7) },
+  createAt: { type: DataTypes.DATE },
+  updateAt: { type: DataTypes.DATE },
 });
 
 Review.belongsTo(User, { foreignKey: "userId" });
