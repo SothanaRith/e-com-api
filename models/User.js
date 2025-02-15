@@ -16,23 +16,16 @@ const User = sequelize.define('User', {
   thumbnailImage: { type: DataTypes.TEXT },
   isVerify: { type: DataTypes.BOOLEAN, defaultValue: false },
   bio: { type: DataTypes.TEXT },
-  statusTitle: { type: DataTypes.STRING },
-  isMuted: { type: DataTypes.BOOLEAN, defaultValue: false },
-  hasStory: { type: DataTypes.BOOLEAN, defaultValue: false },
   LatLong_lat: { type: DataTypes.DECIMAL(10, 7) },
   LatLong_long: { type: DataTypes.DECIMAL(10, 7) },
   isFriend: { type: DataTypes.BOOLEAN, defaultValue: false },
-  isFollowing: { type: DataTypes.BOOLEAN, defaultValue: false },
   friendSince: { type: DataTypes.DATE },
-  isFollower: { type: DataTypes.BOOLEAN, defaultValue: false },
   isBlock: { type: DataTypes.BOOLEAN, defaultValue: false },
   userQR: { type: DataTypes.STRING },
-  
   password: { type: DataTypes.STRING, allowNull: false }, // Hashed password
   phone: { type: DataTypes.STRING },
-  role: { type: DataTypes.STRING, defaultValue: 'buyer' }, // buyer, seller, admin
+  role: { type: DataTypes.ENUM("buyer", "seller", "admin"), allowNull: false },
   status: { type: DataTypes.STRING, defaultValue: 'active' }, // active, deactivated
-  lastActive: { type: DataTypes.DATE, allowNull: true }, // New field to track last active time
   passwordResetOtp: {
     type: DataTypes.STRING,
     allowNull: true,

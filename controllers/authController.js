@@ -28,7 +28,10 @@ const transporter = nodemailer.createTransport({
 });
 
 exports.register = async (req, res) => {
+
   const { name, email, password, phone, role } = req.body;
+
+  const roles = role ?? 'buyer';
 
   try {
     // Step 1: Check if the email is already registered
@@ -51,7 +54,7 @@ exports.register = async (req, res) => {
       email,
       password: hashedPassword,
       phone,
-      role,
+      roles,
     });
 
     // Step 4: Return success response
