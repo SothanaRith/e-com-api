@@ -12,7 +12,6 @@ const User = sequelize.define('User', {
       isEmail: true,  // Validates the email format
     },
   },
-  username: { type: DataTypes.STRING, allowNull: false },
   coverImage: { type: DataTypes.TEXT },
   thumbnailImage: { type: DataTypes.TEXT },
   isVerify: { type: DataTypes.BOOLEAN, defaultValue: false },
