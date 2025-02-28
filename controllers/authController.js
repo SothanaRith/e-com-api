@@ -290,7 +290,7 @@ exports.logout = async (req, res) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET); // Verify token using your secret
+    const decoded = jwt.verify(token, JWT_SECRET); 
     const expiryDate = new Date(decoded.exp * 1000); // Expiry date from decoded token
 
     await Blacklist.create({ token, expiresAt: expiryDate }); // Save token in blacklist table
