@@ -31,8 +31,6 @@ exports.register = async (req, res) => {
 
   const { name, email, password, phone, role } = req.body;
 
-  const roles = role ?? 'buyer';
-
   try {
     // Step 1: Check if the email is already registered
     const existingUser = await User.findOne({ where: { email } });
@@ -54,7 +52,7 @@ exports.register = async (req, res) => {
       email,
       password: hashedPassword,
       phone,
-      roles,
+      role,
     });
 
     // Step 4: Return success response
@@ -129,8 +127,7 @@ exports.login = async (req, res) => {
     // Step 4: Return the success response with tokens
     res.status(200).json({
       success: true,
-      accessToken,
-      refreshToken,
+      message: 'please check your email for the OTP',
     });
 
   } catch (error) {
@@ -151,19 +148,45 @@ exports.verifyOtp = async (req, res) => {
     const user = await User.findOne({ where: { email } });
 
     if (!user) {
-      console.log(`User not found with email: ${email}`); // Add this for debugging
+      console.log(`User not found with email: ${email}`); // Debugging
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Further checks and OTP validation logic
+    // Validate the OTP
     const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
     if (user.passwordResetOtp !== hashedOtp || user.passwordResetExpires < Date.now()) {
       return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
     }
 
-    res.status(200).json({ success: true, message: 'OTP verified successfully' });
+    // Generate JWT access token
+    const accessToken = jwt.sign(
+      { id: user.id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    // Generate JWT refresh token
+    const refreshToken = jwt.sign(
+      { id: user.id },
+      JWT_REFRESH_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Save refresh token to the user's record
+    user.refreshToken = refreshToken;
+    user.passwordResetOtp = null;  // Clear OTP after successful verification
+    user.passwordResetExpires = null;
+    await user.save();
+
+    // Return success response with tokens
+    res.status(200).json({
+      success: true,
+      message: 'OTP verified successfully',
+      accessToken,
+      refreshToken,
+    });
   } catch (error) {
-    console.error('Error verifying OTP:', error); // Log error for debugging
+    console.error('Error verifying OTP:', error);
     res.status(500).json({ success: false, message: 'Error verifying OTP', error });
   }
 };
