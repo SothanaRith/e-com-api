@@ -10,9 +10,9 @@ const Product = sequelize.define("Product", {
     allowNull: false, 
     references: { model: "Categories", key: "id" }
   },
-  reviewId: {  // ✅ Add reviewId to link with Review model
+  reviewId: {  
     type: DataTypes.INTEGER,
-    allowNull: true, // ✅ Allow NULL because reviews come after product creation
+    allowNull: true, 
     references: { model: "Reviews", key: "id" },
   },
   name: { type: DataTypes.STRING, allowNull: false },
