@@ -28,7 +28,6 @@ const transporter = nodemailer.createTransport({
 });
 
 exports.register = async (req, res) => {
-
   const { name, email, password, phone, role } = req.body;
 
   try {
@@ -38,7 +37,7 @@ exports.register = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: 'This email address is already registered. You can only register once with this email.',
+        message: 'This email address is already registered.',
       });
     }
 
@@ -55,25 +54,22 @@ exports.register = async (req, res) => {
       role,
     });
 
-    // Step 4: Return success response
+    // Step 4: Generate access token for OTP verification
+    const accessToken = jwt.sign(
+      { id: newUser.id, role: newUser.role },
+      JWT_SECRET,
+      { expiresIn: '15m' } // Token expires in 15 minutes
+    );
+
+    // Step 5: Return the access token only
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
-      user: newUser,
+      message: 'User registered successfully. Please verify OTP.',
+      accessToken,
     });
   } catch (error) {
-    // Log the error to the console for debugging
     console.error('Error during registration:', error);
 
-    // Check for specific errors
-    if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(400).json({
-        success: false,
-        message: 'This email address is already registered.',
-      });
-    }
-
-    // General error handling
     res.status(500).json({
       success: false,
       message: 'Error registering user',
@@ -81,7 +77,6 @@ exports.register = async (req, res) => {
     });
   }
 };
-
 
 exports.login = async (req, res) => {
   const { email, password } = req.body;
@@ -128,6 +123,7 @@ exports.login = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'please check your email for the OTP',
+      accessToken
     });
 
   } catch (error) {
@@ -141,56 +137,54 @@ exports.login = async (req, res) => {
 };
 
 exports.verifyOtp = async (req, res) => {
-  const { email, otp } = req.body;
+  const { otp } = req.body;
+  const token = req.header('Authorization')?.split(' ')[1]; // Get access token
+
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'No access token provided' });
+  }
 
   try {
-    // Check if the email exists in the database
-    const user = await User.findOne({ where: { email } });
+    // Verify the access token
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = decoded.id;
+
+    // Find the user by ID
+    const user = await User.findOne({ where: { id: userId } });
 
     if (!user) {
-      console.log(`User not found with email: ${email}`); // Debugging
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Validate the OTP
+    // Validate OTP
     const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
     if (user.passwordResetOtp !== hashedOtp || user.passwordResetExpires < Date.now()) {
       return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
     }
 
-    // Generate JWT access token
-    const accessToken = jwt.sign(
-      { id: user.id, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '15m' }
-    );
+    // Generate new JWT access and refresh tokens
+    const accessToken = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '15m' });
+    const refreshToken = jwt.sign({ id: user.id }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
 
-    // Generate JWT refresh token
-    const refreshToken = jwt.sign(
-      { id: user.id },
-      JWT_REFRESH_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    // Save refresh token to the user's record
+    // Update user with new refresh token and clear OTP data
     user.refreshToken = refreshToken;
-    user.passwordResetOtp = null;  // Clear OTP after successful verification
+    user.passwordResetOtp = null;
     user.passwordResetExpires = null;
     await user.save();
 
-    // Return success response with tokens
+    // Return success response with new tokens
     res.status(200).json({
       success: true,
       message: 'OTP verified successfully',
       accessToken,
       refreshToken,
     });
+
   } catch (error) {
     console.error('Error verifying OTP:', error);
-    res.status(500).json({ success: false, message: 'Error verifying OTP', error });
+    res.status(500).json({ success: false, message: 'Error verifying OTP', error: error.message });
   }
 };
-
 
 exports.resetPassword = async (req, res) => {
   const { email, newPassword } = req.body;
@@ -220,13 +214,18 @@ exports.resetPassword = async (req, res) => {
 };
 
 exports.sendOtpForReset = async (req, res) => {
-  const { email } = req.body;
+  const token = req.header('Authorization')?.split(' ')[1]; // Get access token
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'No access token provided' });
+  }
 
   try {
-    console.log("Request received with email: ", email);
 
-    const user = await User.findOne({ where: { email } });
-    console.log("User found: ", user);
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = decoded.id;
+
+    // Find the user by ID
+    const user = await User.findOne({ where: { id: userId } });
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
