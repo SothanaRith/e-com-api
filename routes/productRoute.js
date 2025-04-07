@@ -1,9 +1,16 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const productController = require('../controllers/productController');
+const productController = require("../controllers/productController");
+const upload = require("../utils/fileUpload"); // Import the helper
 
-// Define the route to get all users
-router.post('/create-product', productController.createProduct);
-router.get('/get-products', productController.getAllProduct);
-router.post('/get-product', productController.getProductById);
+// Use upload middleware
+router.get("/get-all", productController.getAllProducts)
+router.get("/get-product/:id", productController.getProductById);
+router.post("/create-product", upload.single("image"), productController.createProduct);
+router.put("/update-product/:productId", upload.single("image"), productController.updateProduct);
+// router.post("/create-cart/:userId",  productController.a);
+router.post("/buy/:userId",  productController.buyProduct);
+// router.g("/placeOrder", productController.placeOrder);
+
+
 module.exports = router;

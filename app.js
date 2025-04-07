@@ -35,7 +35,7 @@ app.use("/api/product", productRoute);
 // Sync database and start server
 sequelize.sync({ alter: true }).then(() => {
   console.log('Database synced');
-  const PORT = 3000;
+  const PORT = 6000;
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
