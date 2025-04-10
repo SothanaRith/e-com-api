@@ -9,6 +9,11 @@ const User = sequelize.define('User', {
     unique: false,  
     validate: { isEmail: true },
   },
+  tokenVersion: {
+    type: DataTypes.STRING,
+    default: 0,
+  },
+  hashedRefreshToken: { type: DataTypes.TEXT },
   coverImage: { type: DataTypes.TEXT },
   thumbnailImage: { type: DataTypes.TEXT },
   isVerify: { type: DataTypes.BOOLEAN, defaultValue: false },

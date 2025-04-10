@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { decrypt } = require('../utils/crypto');
-const Blacklist = require('../models/Blacklist');
+const { User } = require('../models');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -14,17 +14,20 @@ const authenticateToken = async (req, res, next) => {
 
   try {
     const decryptedToken = decrypt(encryptedToken);
-    const hashedToken = crypto.createHash('sha256').update(decryptedToken).digest('hex');
+    const decoded = jwt.verify(decryptedToken, JWT_SECRET);
 
-    const blacklisted = await Blacklist.findOne({ where: { token: hashedToken } });
-    if (blacklisted) {
-      return res.status(401).json({ success: false, message: 'Token is invalidated.' });
+    const user = await User.findByPk(decoded.id);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'User not found.' });
     }
 
-    const decoded = jwt.verify(decryptedToken, JWT_SECRET);
-    req.user = { id: decoded.id, role: decoded.role };
+    if (decoded.tokenVersion !== user.tokenVersion) {
+      return res.status(401).json({ success: false, message: 'Token expired. Please re-login.' });
+    }
 
+    req.user = { id: user.id, role: user.role };
     next();
+
   } catch (error) {
     console.error('Error in authenticateToken:', error);
     res.status(401).json({ success: false, message: 'Invalid or expired token.', error: error.message });
