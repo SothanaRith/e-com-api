@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const dotenv = require('dotenv');
+const jwt = require("jsonwebtoken");
+const bcrypt = require('bcrypt');
 
 dotenv.config();
 
@@ -24,4 +26,26 @@ const decrypt = (data) => {
   return decrypted;
 };
 
-module.exports = { encrypt, decrypt };
+const generateTokens = async (user) => {
+  // generate random refresh token
+  const refreshToken = crypto.randomBytes(64).toString('hex');
+  const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+
+  // Increment tokenVersion => expire all old access tokens
+  user.tokenVersion += 1;
+  user.hashedRefreshToken = hashedRefreshToken;
+  await user.save();
+
+  const accessToken = jwt.sign(
+      { id: user.id, role: user.role, tokenVersion: user.tokenVersion },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' }
+  );
+
+  return {
+    accessToken: encrypt(accessToken),
+    refreshToken: encrypt(refreshToken),
+  };
+};
+
+module.exports = { encrypt, decrypt, generateTokens };
