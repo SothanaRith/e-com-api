@@ -1,5 +1,6 @@
 const { User } = require('../models');
 const jwt = require('jsonwebtoken');
+const { encrypt, decrypt, generateTokens } = require('../utils/crypto');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
@@ -61,7 +62,7 @@ exports.listUsers = async (req, res) => {
       }
   
       // Verify and decode the token
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(decrypt(token), JWT_SECRET);
       const userId = decoded.id;
   
       // Fetch user by decoded ID, excluding sensitive fields
