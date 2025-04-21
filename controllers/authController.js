@@ -100,7 +100,7 @@ exports.login = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Login successful.',
+      message: 'Login successful. Please verify OTP.',
       accessToken,
       refreshToken,
     });
@@ -110,6 +110,43 @@ exports.login = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Error logging in',
+      error: error.message || error,
+    });
+  }
+};
+
+exports.checkMail = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    // Find user by email
+    const user = await User.findOne({ where: { email } });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials. User not found.',
+      });
+    }
+
+    // Generate new Tokens
+    const { accessToken, refreshToken } = await generateTokens(user);
+
+    // Save new hashedRefreshToken and tokenVersion
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'please verify OTP.',
+      accessToken,
+      refreshToken,
+    });
+
+  } catch (error) {
+    console.error('Error during verify:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error verifying email',
       error: error.message || error,
     });
   }
