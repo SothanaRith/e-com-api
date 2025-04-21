@@ -52,6 +52,10 @@ const Product = sequelize.define("Product", {
     type: DataTypes.JSON, // Store images as an array of URLs in JSON format
     allowNull: true,
     defaultValue: [] // Default is an empty array
+  },
+  storeId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
   }
 }, {
   timestamps: true,
