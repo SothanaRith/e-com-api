@@ -11,6 +11,7 @@ const Payment = sequelize.define("Payment", {
   quantity: { type: DataTypes.INTEGER, allowNull: false,},
   totalPrice: { type: DataTypes.DECIMAL(10, 7) },
   paymentType: { type: DataTypes.ENUM("aba", "ac", "offline"), allowNull: false },
+  paymentStatus: {type: DataTypes.ENUM('Pending', 'Paid', 'Failed'), defaultValue: 'Pending',},
   status: { type: DataTypes.DECIMAL(10, 7) },
   createAt: { type: DataTypes.DATE },
   updateAt: { type: DataTypes.DATE },
