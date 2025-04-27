@@ -227,11 +227,20 @@ exports.refreshToken = async (req, res) => {
 }
 
 exports.resetPassword = async (req, res) => {
-  const { email, newPassword } = req.body;
+  const { newPassword } = req.body;
+  const token = req.header('Authorization')?.split(' ')[1]; // Get encrypted access token
+
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'No access token provided' });
+  }
 
   try {
     // Check if user exists
-    const user = await User.findOne({ where: { email } });
+    const decryptedToken = decrypt(token);
+    const decoded = jwt.verify(decryptedToken, JWT_SECRET);
+
+    const userId = decoded.id;
+    const user = await User.findOne({ where: { id: userId } });
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
