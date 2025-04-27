@@ -10,137 +10,138 @@ const Cart = require("../models/Cart");
 const path = require("path");
 const upload = require("../controllers/uploadController");
 exports.createProduct = async (req, res) => {
-  try {
-    const { categoryId, reviewId, name, description, price, imageUrl,  variants, review} = req.body;
-    let totalStock = 0;
-    const imageArray = Array.isArray(imageUrl) ? imageUrl : [];
-    // Validate required fields
-    if (!categoryId || !name) {
-      return res.status(400).json({ message: "Category ID and Product Name are required" });
+    try {
+        const { categoryId, reviewId, name, description, price, imageUrl,  variants, review} = req.body;
+        let totalStock = 0;
+        // Get file paths from uploaded files
+        const imageArray = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
+        // Validate required fields
+        if (!categoryId || !name) {
+            return res.status(400).json({ message: "Category ID and Product Name are required" });
+        }
+
+        // Check if category exists
+        const category = await Category.findByPk(categoryId);
+        if (!category) {
+            return res.status(404).json({ message: "Category not found" });
+        }
+
+        // Create product (✅ Review ID is optional)
+        const product = await Product.create({
+            categoryId,
+            reviewId: reviewId || null, // ✅ If no reviewId provided, set to null
+            name,
+            description,
+            price,
+            imageUrl: imageArray,
+            totalStock : 0
+        });
+
+        let createdReview = null;
+        if (review && review.rating) {
+            createdReview = await Review.create({
+                productId: product.id,
+                rating: review.rating,
+                comment: review.comment,
+            });
+        }
+
+        if (variants && Array.isArray(variants) && variants.length > 0) {
+            const createdVariants = [];
+            for (const variantData of variants) {
+                const { sku, price, stock, attributes } = variantData;
+
+                const existingVariant = await Variant.findOne({ where: { sku } });
+                if (existingVariant) {
+                    return res.status(400).json({ error: `SKU '${sku}' already exists.` });
+                }
+
+                const variant = await Variant.create({
+                    productId: product.id,
+                    sku,
+                    price,
+                    stock,
+                });
+                totalStock += stock;
+                if (attributes && Array.isArray(attributes) && attributes.length > 0) {
+                    await Promise.all(
+                        attributes.map((attribute) =>
+                            VariantAttribute.create({
+                                variantId: variant.id,
+                                name: attribute.name,
+                                value: attribute.value,
+                            })
+                        )
+                    );
+                    variant.dataValues.attributes = attributes;
+                }
+
+                createdVariants.push(variant);
+            }
+            product.dataValues.variants = createdVariants;
+        }
+        const updatedProduct = await Product.findByPk(product.id, {
+            include: [
+                {
+                    model: Category,
+                    attributes: ['id'],
+                },
+                {
+                    model: Variant,
+                    attributes: ['id', 'productId', 'sku', 'price', 'stock'],
+                    include: {
+                        model: VariantAttribute,
+                        attributes: ['name', 'value']
+                    }
+                },
+                {
+                    model: Review,
+                    attributes: ['id','rating', 'comment'],
+                    required: false,
+                }
+            ],
+        });
+
+        await Product.update({ totalStock }, { where: { id: product.id } });
+
+        const reviews = updatedProduct.Reviews.map(review => ({
+            id: review.id,
+            rating: review.rating,
+            comment: review.comment
+        }));
+
+        const productVariant = updatedProduct.Variants.map(variant => ({
+            id: variant.id,
+            productId: variant.productId,
+            sku: variant.sku,
+            price: variant.price,
+            stock: variant.stock,
+            attributes: variant.VariantAttributes.map(attribute => ({ // include Attributes
+                name: attribute.name,
+                value: attribute.value
+            }))
+        }));
+
+
+        const response = {
+            product : {
+                productId: updatedProduct.productId,
+                name: updatedProduct.name,
+                description: updatedProduct.description,
+                price: updatedProduct.price,
+                stock: updatedProduct.stock,
+                imageUrl: imageArray,
+                categoryId: updatedProduct.categoryId,
+                reviews: reviews.length > 0 ? reviews : [],
+                variants: productVariant.length > 0 ? productVariant : []
+            }
+        }
+        return res.status(201).json({ message: "Product created successfully", product: response });
+
+    } catch (error) {
+        console.error("Error creating product:", error);
+        return res.status(500).json({ message: "Internal server error", error: error.message });
     }
-    
-    // Check if category exists
-    const category = await Category.findByPk(categoryId);
-    if (!category) {
-      return res.status(404).json({ message: "Category not found" });
-    }
-
-    // Create product (✅ Review ID is optional)
-    const product = await Product.create({
-      categoryId,
-      reviewId: reviewId || null, // ✅ If no reviewId provided, set to null
-      name,
-      description,
-      price,
-      imageUrl: imageArray,
-      totalStock : 0
-    });
-
-      let createdReview = null;
-      if (review && review.rating) {
-          createdReview = await Review.create({
-              productId: product.id,
-              rating: review.rating,
-              comment: review.comment,
-          });
-      }
-
-      if (variants && Array.isArray(variants) && variants.length > 0) {
-          const createdVariants = [];
-          for (const variantData of variants) {
-              const { sku, price, stock, attributes } = variantData;
-
-              const existingVariant = await Variant.findOne({ where: { sku } });
-              if (existingVariant) {
-                  return res.status(400).json({ error: `SKU '${sku}' already exists.` });
-              }
-
-              const variant = await Variant.create({
-                  productId: product.id,
-                  sku,
-                  price,
-                  stock,
-              });
-              totalStock += stock;
-              if (attributes && Array.isArray(attributes) && attributes.length > 0) {
-                  await Promise.all(
-                      attributes.map((attribute) =>
-                          VariantAttribute.create({
-                              variantId: variant.id,
-                              name: attribute.name,
-                              value: attribute.value,
-                          })
-                      )
-                  );
-                  variant.dataValues.attributes = attributes;
-              }
-
-              createdVariants.push(variant);
-          }
-          product.dataValues.variants = createdVariants;
-      }
-      const updatedProduct = await Product.findByPk(product.id, {
-          include: [
-              {
-                  model: Category,
-                  attributes: ['id'],
-              },
-              {
-                  model: Variant,
-                  attributes: ['id', 'productId', 'sku', 'price', 'stock'],
-                  include: {
-                      model: VariantAttribute,
-                      attributes: ['name', 'value']
-                  }
-              },
-              {
-                  model: Review,
-                  attributes: ['id','rating', 'comment'],
-                  required: false,
-              }
-          ],
-      });
-      
-    await Product.update({ totalStock }, { where: { id: product.id } });
-    
-    const reviews = updatedProduct.Reviews.map(review => ({
-      id: review.id,
-      rating: review.rating,
-      comment: review.comment
-    }));
-    
-    const productVariant = updatedProduct.Variants.map(variant => ({
-      id: variant.id,
-      productId: variant.productId,
-      sku: variant.sku,
-      price: variant.price,
-      stock: variant.stock,
-      attributes: variant.VariantAttributes.map(attribute => ({ // include Attributes
-        name: attribute.name,
-        value: attribute.value
-      }))
-    }));
-
-    
-    const response = {
-      product : {
-        productId: updatedProduct.productId,
-        name: updatedProduct.name,
-        description: updatedProduct.description,
-        price: updatedProduct.price,
-        stock: updatedProduct.stock,
-        imageUrl: imageArray,
-        categoryId: updatedProduct.categoryId,
-        reviews: reviews.length > 0 ? reviews : [],
-        variants: productVariant.length > 0 ? productVariant : []
-      }
-    }
-    return res.status(201).json({ message: "Product created successfully", product: response });
-
-  } catch (error) {
-    console.error("Error creating product:", error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
-  }
 };
 // exports.createProduct = async (req, res) => {
 //     try {
