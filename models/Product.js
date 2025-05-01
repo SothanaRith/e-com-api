@@ -32,6 +32,7 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
 const Category = require("./Category");
+const RelatedProduct = require("./RelatedProduct");
 
 const Product = sequelize.define("Product", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -62,5 +63,11 @@ const Product = sequelize.define("Product", {
 });
 
 // Product.belongsTo(Category, { foreignKey: "categoryId", onDelete: "CASCADE" });
+Product.belongsToMany(Product, {
+  as: 'RelatedProducts',
+  through: RelatedProduct,
+  foreignKey: 'productId',
+  otherKey: 'relatedProductId'
+});
 
 module.exports = Product;

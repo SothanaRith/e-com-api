@@ -6,12 +6,13 @@ const User = require('../models/User')
 const Variant = require('../models/VariantModel')
 const OrderProduct = require('../models/OrderProduct')
 const VariantAttribute = require('../models/VariantAttributeModel')
+const RelatedProduct = require('../models/RelatedProduct')
 const Cart = require("../models/Cart");
 const path = require("path");
 const upload = require("../controllers/uploadController");
 exports.createProduct = async (req, res) => {
     try {
-        const { categoryId, reviewId, name, description, price, imageUrl,  variants, review} = req.body;
+        const { categoryId, reviewId, name, description, price, variants, review, relatedProductIds } = req.body;
         let totalStock = 0;
         // Get file paths from uploaded files
         const imageArray = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
@@ -122,20 +123,41 @@ exports.createProduct = async (req, res) => {
             }))
         }));
 
+// Save related products (store only the IDs in the join table)
+        if (relatedProductIds && Array.isArray(relatedProductIds)) {
+            for (const relatedId of relatedProductIds) {
+                const exists = await Product.findByPk(relatedId);
+                if (exists) {
+                    await RelatedProduct.create({
+                        productId: product.id,
+                        relatedProductId: relatedId
+                    });
+                }
+            }
+        }
 
+// Fetch related products via association
+        const relatedProducts = await product.getRelatedProducts({
+            attributes: ['id'],
+        });
+        const relatedProductIdsResult = relatedProducts.map(p => p.id);
+
+// Build response
         const response = {
-            product : {
-                productId: updatedProduct.productId,
+            product: {
+                productId: updatedProduct.id,
                 name: updatedProduct.name,
                 description: updatedProduct.description,
                 price: updatedProduct.price,
-                stock: updatedProduct.stock,
+                stock: updatedProduct.totalStock,
                 imageUrl: imageArray,
                 categoryId: updatedProduct.categoryId,
                 reviews: reviews.length > 0 ? reviews : [],
-                variants: productVariant.length > 0 ? productVariant : []
+                variants: productVariant.length > 0 ? productVariant : [],
+                relatedProductIds: relatedProductIdsResult
             }
-        }
+        };
+
         return res.status(201).json({ message: "Product created successfully", product: response });
 
     } catch (error) {
