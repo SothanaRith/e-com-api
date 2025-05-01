@@ -10,6 +10,7 @@ const RelatedProduct = require('../models/RelatedProduct')
 const Cart = require("../models/Cart");
 const path = require("path");
 const upload = require("../controllers/uploadController");
+
 exports.createProduct = async (req, res) => {
     try {
         const { categoryId, reviewId, name, description, price, variants, review, relatedProductIds } = req.body;
@@ -479,5 +480,30 @@ exports.buyProduct = async (req, res) => {
     }
 };
 
+exports.deleteProduct = async (req, res) => {
+    try {
+        const { productId } = req.params;
+
+        // Check if product exists
+        const product = await Product.findByPk(productId);
+        if (!product) {
+            return res.status(404).json({ message: "Product not found" });
+        }
+
+        // Optional: Delete related data (variants, related products, etc.)
+        await Variant.destroy({ where: { productId } }); // if you have variants
+        await RelatedProduct.destroy({ where: { productId } }); // one side
+        await RelatedProduct.destroy({ where: { relatedProductId: productId } }); // other side
+
+        // Delete the product
+        await product.destroy();
+
+        return res.status(200).json({ message: "Product deleted successfully" });
+
+    } catch (error) {
+        console.error("Error deleting product:", error);
+        res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+};
 
 

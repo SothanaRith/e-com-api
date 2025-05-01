@@ -11,6 +11,6 @@ router.put("/update-product/:productId", upload.array('images', 5), productContr
 // router.post("/create-cart/:userId",  productController.a);
 router.post("/buy/:userId",  productController.buyProduct);
 // router.g("/placeOrder", productController.placeOrder);
-
+router.delete("/delete/:productId", productController.deleteProduct);
 
 module.exports = router;
