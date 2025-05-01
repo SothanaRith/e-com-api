@@ -29,7 +29,7 @@ exports.createProduct = async (req, res) => {
         // Create product (✅ Review ID is optional)
         const product = await Product.create({
             categoryId,
-            reviewId: reviewId || null, // ✅ If no reviewId provided, set to null
+            reviewId: reviewId || null, 
             name,
             description,
             price,

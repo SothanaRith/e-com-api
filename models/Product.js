@@ -38,7 +38,7 @@ const Product = sequelize.define("Product", {
   categoryId: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    references: { model: "Categories", key: "id" }
+    references: { model: Category, key: "id" }
   },
   reviewId: {
     type: DataTypes.INTEGER,
@@ -61,6 +61,6 @@ const Product = sequelize.define("Product", {
   timestamps: true,
 });
 
-Product.belongsTo(Category, { foreignKey: "categoryId", onDelete: "CASCADE" });
+// Product.belongsTo(Category, { foreignKey: "categoryId", onDelete: "CASCADE" });
 
 module.exports = Product;

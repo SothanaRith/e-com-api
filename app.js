@@ -12,6 +12,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const contentRoutes = require("./routes/contentRoutes");
 const categoryRoute = require("./routes/categoryRoute");
 const productRoute = require("./routes/productRoute");
+const loadHomeRoute = require("./routes/loadHomeRoute");
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use('/api/users', userRoutes);
 app.use("/api/contents", contentRoutes);
 app.use("/api/category", categoryRoute);
 app.use("/api/product", productRoute);
+app.use("/api/home", loadHomeRoute);
 
 // Sync database and start server
 sequelize.sync({ alter: true }).then(() => {
