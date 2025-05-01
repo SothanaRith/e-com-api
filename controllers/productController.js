@@ -201,63 +201,111 @@ exports.createProduct = async (req, res) => {
 // };
 exports.getAllProducts = async (req, res) => {
     try {
-        const products = await Product.findAll();
-        return res.status(200).json(products);
-    }catch (e) {
-        console.error(e);
-    }
-};
-exports.updateProduct = async (req, res) => {
-    try {
-        const { productId } = req.params;  // Make sure this matches your route
-        const { name, description, price, stock, imageUrl } = req.body;
-
-        // Find the product by ID
-        const product = await Product.findByPk(productId);
-        if (!product) {
-            return res.status(404).json({ message: "Product not found" });
-        }
-
-        // Update product details
-        await product.update({
-            name: name || product.name,
-            price: price || product.price,
-            stock: stock || product.stock,
-            description: description || product.description,
-            imageUrl: imageUrl || product.imageUrl
-        });
-
-        // Send a response after updating
-        return res.status(200).json({ message: "Product updated successfully", product });
-
-    } catch (error) {
-        console.error("Error updating product:", error);
-        res.status(500).json({ message: "Internal server error", error: error.message });
-    }
-};
-exports.getProductById = async (req, res) =>{
-  try {
-        const { id } = req.params; // Get id from URL parameters
-        console.log(req.params);
-        console.log("product id: ",id);
-        const product = await Product.findByPk(id, {
+        const products = await Product.findAll({
             include: [
                 {
                     model: Category,
-                    attributes: ['id'], // Only select the category id
+                    attributes: ['id', 'name']
                 },
                 {
                     model: Variant,
-                    attributes: ['id', 'productId', 'sku', 'price', 'stock'],
-                    include: { // Include VariantAttribute
+                    include: {
                         model: VariantAttribute,
                         attributes: ['name', 'value']
                     }
                 },
                 {
                     model: Review,
-                    attributes: ['id', 'rating', 'comment'], // Include review details you need
-                    required: false, // Ensure it doesn't throw an error if no reviews are found
+                    attributes: ['id', 'rating', 'comment'],
+                    required: false
+                },
+                {
+                    model: Product,
+                    as: 'RelatedProducts',
+                    attributes: ['id', 'name'],
+                    through: { attributes: [] }
+                }
+            ]
+        });
+        return res.status(200).json(products);
+    } catch (error) {
+        console.error("Error fetching products:", error);
+        return res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+};
+
+exports.updateProduct = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const { name, description, price, stock, imageUrl, relatedProductIds } = req.body;
+
+        const product = await Product.findByPk(productId);
+        if (!product) {
+            return res.status(404).json({ message: "Product not found" });
+        }
+
+        // Update main product info
+        await product.update({
+            name: name ?? product.name,
+            description: description ?? product.description,
+            price: price ?? product.price,
+            stock: stock ?? product.stock,
+            imageUrl: imageUrl ?? product.imageUrl
+        });
+
+        // Handle related products
+        if (relatedProductIds && Array.isArray(relatedProductIds)) {
+            // Remove existing related products
+            await product.setRelatedProducts([]);
+
+            // Re-add new related products if any
+            const validRelatedProducts = await Product.findAll({
+                where: { id: relatedProductIds }
+            });
+
+            await product.addRelatedProducts(validRelatedProducts);
+        }
+
+        // Fetch updated related products
+        const relatedProducts = await product.getRelatedProducts({ attributes: ['id', 'name'] });
+
+        return res.status(200).json({
+            message: "Product updated successfully",
+            product: {
+                ...product.toJSON(),
+                relatedProducts
+            }
+        });
+
+    } catch (error) {
+        console.error("Error updating product:", error);
+        return res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+};
+
+exports.getProductById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        console.log("Product ID:", id);
+
+        const product = await Product.findByPk(id, {
+            include: [
+                {
+                    model: Category,
+                    attributes: ['id'],
+                },
+                {
+                    model: Variant,
+                    attributes: ['id', 'productId', 'sku', 'price', 'stock'],
+                    include: [{
+                        model: VariantAttribute,
+                        attributes: ['name', 'value']
+                    }]
+                },
+                {
+                    model: Review,
+                    attributes: ['id', 'rating', 'comment'],
+                    required: false,
                 }
             ],
         });
@@ -265,23 +313,25 @@ exports.getProductById = async (req, res) =>{
         if (!product) {
             return res.status(404).json({ message: "Product not found" });
         }
-        const reviews = product.Reviews.map(review => ({
+
+        const reviews = product.Reviews?.map(review => ({
             id: review.id,
             rating: review.rating,
-            comment: review.comment // Assuming 'comment' is the field in your Review model
-        }));
-        const variants = product.Variants.map(variant => ({
+            comment: review.comment
+        })) || [];
+
+        const variants = product.Variants?.map(variant => ({
             id: variant.id,
             productId: variant.productId,
             sku: variant.sku,
             price: variant.price,
             stock: variant.stock,
-            attributes: variant.VariantAttributes.map(attribute => ({ // include Attributes
-                name: attribute.name,
-                value: attribute.value
-            }))
-        }));
-        // Get categoryId and reviews (empty list if no reviews)
+            attributes: variant.VariantAttributes?.map(attr => ({
+                name: attr.name,
+                value: attr.value
+            })) || []
+        })) || [];
+
         const response = {
             product: {
                 id: product.id,
@@ -291,131 +341,143 @@ exports.getProductById = async (req, res) =>{
                 stock: product.stock,
                 imageUrl: product.imageUrl,
                 categoryId: product.categoryId,
-                reviews: reviews.length > 0 ? reviews : [],
-                variants: variants.length > 0 ? variants : [],
-            },
+                reviews,
+                variants
+            }
         };
 
         res.status(200).json(response);
     } catch (error) {
         console.error("Error fetching product:", error);
-        res.status(500).json({ message: "Internal server error" });
+        res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
 
-exports.placeOrder = async (req, res) =>{
+exports.placeOrder = async (req, res) => {
     const { userId, items, paymentType } = req.body;
-  // Check for missing fields
-  if (!userId || !items || !paymentType) {
-    return res.status(400).json({ message: "Missing required fields" });
-  }
 
-  try {
-    let totalAmount = 0;
-    // Check if user exists
-    const user = await User.findByPk(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    // Validate stock and calculate total price
-    for (const item of items) {
-      const product = await Product.findByPk(item.productId);
-      if (!product) return res.status(404).json({ message: `Product ID ${item.productId} not found` });
-
-      if (product.stock < item.quantity) {
-        return res.status(400).json({ message: `Unavailable stock for ${product.name}` });
-      }
-
-      totalAmount += product.price * item.quantity;
+    if (!userId || !items || !paymentType || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: "Missing or invalid required fields" });
     }
 
-    // Create the Order
-    const order = await Order.create({ userId, totalAmount, paymentType });
+    const transaction = await sequelize.transaction(); // Start transaction
 
-    // Deduct stock and create OrderProducts (not OrderItems)
-    for (const item of items) {
-      const product = await Product.findByPk(item.productId);
+    try {
+        let totalAmount = 0;
 
-      // Deduct stock from product
-      await product.update({ stock: product.stock - item.quantity });
+        const user = await User.findByPk(userId);
+        if (!user) return res.status(404).json({ message: "User not found" });
 
-      // Create an OrderProduct (NOT OrderItem)
-      await OrderProduct.create({
-        orderId: order.id,
-        productId: item.productId,     // Ensure productId is passed
-        quantity: item.quantity,       // Ensure quantity is passed
-        price: product.price,          // Store the price in the order product
-      });
+        const productUpdates = [];
+
+        for (const item of items) {
+            const product = await Product.findByPk(item.productId, { transaction });
+            if (!product) throw new Error(`Product ID ${item.productId} not found`);
+
+            if (product.stock < item.quantity) {
+                throw new Error(`Unavailable stock for ${product.name}`);
+            }
+
+            totalAmount += product.price * item.quantity;
+
+            productUpdates.push({
+                product,
+                newStock: product.stock - item.quantity,
+                quantity: item.quantity,
+                price: product.price
+            });
+        }
+
+        const order = await Order.create({ userId, totalAmount, paymentType }, { transaction });
+
+        for (const update of productUpdates) {
+            await update.product.update({ stock: update.newStock }, { transaction });
+
+            await OrderProduct.create({
+                orderId: order.id,
+                productId: update.product.id,
+                quantity: update.quantity,
+                price: update.price
+            }, { transaction });
+        }
+
+        await transaction.commit();
+
+        return res.status(201).json({
+            message: "Order placed successfully",
+            orderId: order.id,
+            order
+        });
+
+    } catch (error) {
+        await transaction.rollback(); // Revert changes on failure
+        console.error("Error placing order:", error);
+        return res.status(500).json({ message: "Internal server error", error: error.message });
     }
-
-    return res.status(201).json({
-        message: "Order placed successfully",
-        orderId: order.id,
-        order: [order]
-    });
-
-  } catch (error) {
-    console.error("Error placing order:", error); // Log detailed error
-    res.status(500).json({ message: "Internal server error", error: error.message });
-  }
 };
+
 exports.buyProduct = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { productId, variantId, quantity, paymentType } = req.body;  // Include paymentType
-    
-    // Check if product exists
-    const product = await Product.findByPk(productId);
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+    try {
+        const { userId } = req.params;
+        const { productId, variantId, quantity, paymentType } = req.body;  // Include paymentType
+
+        // Check if product exists
+        const product = await Product.findByPk(productId);
+        if (!product) {
+            return res.status(404).json({ message: "Product not found" });
+        }
+
+        // Check if variant exists for the product
+        const variant = await Variant.findOne({ where: { id: variantId, productId } });
+        if (!variant) {
+            return res.status(404).json({ message: "Variant not found" });
+        }
+
+        // Check stock availability for the variant
+        if (quantity > variant.stock) {
+            return res.status(400).json({ message: `Not enough stock. Available: ${variant.stock}` });
+        }
+
+        // Calculate total amount (rounded to 2 decimal places)
+        const totalAmount = (variant.price * quantity).toFixed(2);
+
+        // Create the order (without reducing stock yet)
+        const order = await Order.create({
+            userId,
+            productId,
+            variantId,
+            quantity,
+            totalAmount,
+            paymentType,  // Include paymentType
+        });
+
+        // Deduct stock after the order is created
+        variant.stock -= quantity;
+        await variant.save();
+
+        // Return success response with order details
+        res.json({
+            message: "Purchase successful!",
+            order: {
+                orderId: order.id,
+                userId,
+                product: {
+                    id: product.id,
+                    name: product.name,
+                    variantId: variant.id,
+                    quantityPurchased: quantity,
+                    remainingStock: variant.stock,
+                },
+                totalAmount,
+                paymentType,
+            },
+        });
+
+    } catch (error) {
+        console.error("Error in buying product:", error);
+        res.status(500).json({ message: "Server error", error: error.message });
     }
-    
-    // Check if variant exists
-    const variant = await Variant.findOne({ where: { id: variantId, productId } });
-    if (!variant) {
-      return res.status(404).json({ message: "Variant not found" });
-    }
-    
-    // Check stock availability
-    if (quantity > variant.stock) {
-      return res.status(400).json({ message: `Not enough stock. Available: ${variant.stock}` });
-    }
-    
-    // Calculate total amount
-    const totalAmount = (variant.price * quantity).toFixed(2);
-    
-    // Deduct stock only if the order is successful
-    const order = await Order.create({
-      userId,
-      productId,
-      variantId,
-      quantity,
-      totalAmount,
-      paymentType,  // Include paymentType
-    });
-    
-    // Now deduct stock since order is successful
-    variant.stock -= quantity;
-    await variant.save();
-    
-    res.json({
-      message: "Purchase successful!",
-      order: {
-        orderId: order.id,
-        userId,
-        product: {
-          id: product.id,
-          name: product.name,
-          variantId: variant.id,
-          quantityPurchased: quantity,
-          remainingStock: variant.stock,
-        },
-        totalAmount,
-        paymentType,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error });
-  }
 };
+
 
 
