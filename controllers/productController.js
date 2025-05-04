@@ -307,6 +307,12 @@ exports.getProductById = async (req, res) => {
                     model: Review,
                     attributes: ['id', 'rating', 'comment'],
                     required: false,
+                },
+                {
+                    model: Product,
+                    as: 'RelatedProducts',
+                    attributes: ['id', 'name'],
+                    through: { attributes: [] }
                 }
             ],
         });
@@ -314,40 +320,8 @@ exports.getProductById = async (req, res) => {
         if (!product) {
             return res.status(404).json({ message: "Product not found" });
         }
+        return res.status(200).json(product);
 
-        const reviews = product.Reviews?.map(review => ({
-            id: review.id,
-            rating: review.rating,
-            comment: review.comment
-        })) || [];
-
-        const variants = product.Variants?.map(variant => ({
-            id: variant.id,
-            productId: variant.productId,
-            sku: variant.sku,
-            price: variant.price,
-            stock: variant.stock,
-            attributes: variant.VariantAttributes?.map(attr => ({
-                name: attr.name,
-                value: attr.value
-            })) || []
-        })) || [];
-
-        const response = {
-            product: {
-                id: product.id,
-                name: product.name,
-                description: product.description,
-                price: product.price,
-                stock: product.stock,
-                imageUrl: product.imageUrl,
-                categoryId: product.categoryId,
-                reviews,
-                variants
-            }
-        };
-
-        res.status(200).json(response);
     } catch (error) {
         console.error("Error fetching product:", error);
         res.status(500).json({ message: "Internal server error", error: error.message });
