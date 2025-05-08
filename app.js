@@ -37,7 +37,7 @@ app.use("/api/home", loadHomeRoute);
 // Sync database and start server
 sequelize.sync({ alter: true }).then(() => {
   console.log('Database synced');
-  const PORT = 6000;
+  const PORT = 3000;
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });

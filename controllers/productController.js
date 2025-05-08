@@ -13,118 +13,72 @@ const upload = require("../controllers/uploadController");
 
 exports.createProduct = async (req, res) => {
     try {
-        const { categoryId, reviewId, name, description, price, variants, review, relatedProductIds } = req.body;
+        const {
+            categoryId,
+            review,
+            name,
+            description,
+            price,
+            variants,
+            relatedProductIds,
+        } = req.body;
         let totalStock = 0;
-        // Get file paths from uploaded files
+
         const imageArray = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
-        // Validate required fields
         if (!categoryId || !name) {
             return res.status(400).json({ message: "Category ID and Product Name are required" });
         }
 
-        // Check if category exists
         const category = await Category.findByPk(categoryId);
         if (!category) {
             return res.status(404).json({ message: "Category not found" });
         }
 
-        // Create product (✅ Review ID is optional)
         const product = await Product.create({
             categoryId,
-            reviewId: reviewId || null, 
             name,
             description,
             price,
             imageUrl: imageArray,
-            totalStock : 0
+            totalStock: 0,
         });
 
-        let createdReview = null;
-        if (review && review.rating) {
-            createdReview = await Review.create({
-                productId: product.id,
-                rating: review.rating,
-                comment: review.comment,
-            });
+        if (review && review.rating && review.userId) {
+            const user = await User.findByPk(review.userId);
+            if (user) {
+                await Review.create({
+                    productId: product.id,
+                    userId: user.id,
+                    rating: review.rating,
+                    comment: review.comment,
+                });
+            }
         }
 
-        if (variants && Array.isArray(variants) && variants.length > 0) {
-            const createdVariants = [];
+        if (variants && Array.isArray(variants)) {
             for (const variantData of variants) {
                 const { sku, price, stock, attributes } = variantData;
-
-                const existingVariant = await Variant.findOne({ where: { sku } });
-                if (existingVariant) {
+                if (await Variant.findOne({ where: { sku } })) {
                     return res.status(400).json({ error: `SKU '${sku}' already exists.` });
                 }
 
-                const variant = await Variant.create({
-                    productId: product.id,
-                    sku,
-                    price,
-                    stock,
-                });
+                const variant = await Variant.create({ productId: product.id, sku, price, stock });
                 totalStock += stock;
-                if (attributes && Array.isArray(attributes) && attributes.length > 0) {
-                    await Promise.all(
-                        attributes.map((attribute) =>
-                            VariantAttribute.create({
-                                variantId: variant.id,
-                                name: attribute.name,
-                                value: attribute.value,
-                            })
-                        )
-                    );
-                    variant.dataValues.attributes = attributes;
-                }
 
-                createdVariants.push(variant);
-            }
-            product.dataValues.variants = createdVariants;
-        }
-        const updatedProduct = await Product.findByPk(product.id, {
-            include: [
-                {
-                    model: Category,
-                    attributes: ['id'],
-                },
-                {
-                    model: Variant,
-                    attributes: ['id', 'productId', 'sku', 'price', 'stock'],
-                    include: {
-                        model: VariantAttribute,
-                        attributes: ['name', 'value']
-                    }
-                },
-                {
-                    model: Review,
-                    attributes: ['id','rating', 'comment'],
-                    required: false,
+                if (attributes && Array.isArray(attributes)) {
+                    await Promise.all(attributes.map(attr =>
+                        VariantAttribute.create({
+                            variantId: variant.id,
+                            name: attr.name,
+                            value: attr.value,
+                        })
+                    ));
                 }
-            ],
-        });
+            }
+        }
 
         await Product.update({ totalStock }, { where: { id: product.id } });
 
-        const reviews = updatedProduct.Reviews.map(review => ({
-            id: review.id,
-            rating: review.rating,
-            comment: review.comment
-        }));
-
-        const productVariant = updatedProduct.Variants.map(variant => ({
-            id: variant.id,
-            productId: variant.productId,
-            sku: variant.sku,
-            price: variant.price,
-            stock: variant.stock,
-            attributes: variant.VariantAttributes.map(attribute => ({ // include Attributes
-                name: attribute.name,
-                value: attribute.value
-            }))
-        }));
-
-// Save related products (store only the IDs in the join table)
         if (relatedProductIds && Array.isArray(relatedProductIds)) {
             for (const relatedId of relatedProductIds) {
                 const exists = await Product.findByPk(relatedId);
@@ -137,69 +91,27 @@ exports.createProduct = async (req, res) => {
             }
         }
 
-// Fetch related products via association
-        const relatedProducts = await product.getRelatedProducts({
-            attributes: ['id'],
+        const updatedProduct = await Product.findByPk(product.id, {
+            include: [
+                { model: Category, attributes: ["id"] },
+                {
+                    model: Variant,
+                    attributes: ["id", "productId", "sku", "price", "stock"],
+                    include: { model: VariantAttribute, attributes: ["name", "value"] }
+                },
+                { model: Review, attributes: ["id", "rating", "comment", "userId"], required: false },
+                { model: Product, as: 'RelatedProducts', attributes: ['id'], through: { attributes: [] } },
+            ]
         });
-        const relatedProductIdsResult = relatedProducts.map(p => p.id);
 
-// Build response
-        const response = {
-            product: {
-                productId: updatedProduct.id,
-                name: updatedProduct.name,
-                description: updatedProduct.description,
-                price: updatedProduct.price,
-                stock: updatedProduct.totalStock,
-                imageUrl: imageArray,
-                categoryId: updatedProduct.categoryId,
-                reviews: reviews.length > 0 ? reviews : [],
-                variants: productVariant.length > 0 ? productVariant : [],
-                relatedProductIds: relatedProductIdsResult
-            }
-        };
-
-        return res.status(201).json({ message: "Product created successfully", product: response });
+        return res.status(201).json({ message: "Product created successfully", product: updatedProduct });
 
     } catch (error) {
         console.error("Error creating product:", error);
         return res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
-// exports.createProduct = async (req, res) => {
-//     try {
-//
-//         const { categoryId, name, description, price, stock, ...productData } = req.body;
-//
-//         if (!categoryId || !name) {
-//             return res.status(400).json({ message: "Category ID and Product Name are required" });
-//         }
-//
-//         const parsedCategoryId = parseInt(categoryId, 10);
-//         if (isNaN(parsedCategoryId)) {
-//             return res.status(400).json({ message: "Invalid category ID format" });
-//         }
-//
-//         const category = await Category.findByPk(parsedCategoryId);
-//         if (!category) return res.status(404).json({ message: "Category not found" });
-//
-//         let imageUrl = req.file ? `/uploads/products/${req.file.filename}` : null;
-//
-//         const product = await Product.create({
-//             categoryId: parsedCategoryId,
-//             name,
-//             description,
-//             price,
-//             stock,
-//             imageUrl,
-//         });
-//
-//         return res.status(201).json({ message: "Product created successfully", product });
-//     } catch (error) {
-//         console.error("Error creating product:", error);
-//         res.status(500).json({ message: "Internal server error", error: error.message });
-//     }
-// };
+
 exports.getAllProducts = async (req, res) => {
     try {
         const products = await Product.findAll({
@@ -480,4 +392,146 @@ exports.deleteProduct = async (req, res) => {
     }
 };
 
+exports.addReview = async (req, res) => {
+    try {
+        const { productId, userId, rating, comment } = req.body;
 
+        if (!productId || !userId || !rating) {
+            return res.status(400).json({ message: "productId, userId, and rating are required" });
+        }
+
+        const [product, user] = await Promise.all([
+            Product.findByPk(productId),
+            User.findByPk(userId),
+        ]);
+
+        if (!product) return res.status(404).json({ message: "Product not found" });
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        const existingReview = await Review.findOne({ where: { productId, userId } });
+        if (existingReview) {
+            return res.status(409).json({ message: "User already reviewed this product" });
+        }
+
+        const review = await Review.create({ productId, userId, rating, comment });
+        return res.status(201).json({ message: "Review added", review });
+
+    } catch (error) {
+        console.error("Error adding review:", error);
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+exports.getProductReviews = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const reviews = await Review.findAll({ where: { productId: id } });
+        return res.status(200).json(reviews);
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.searchProducts = async (req, res) => {
+    try {
+        const { query } = req.query;
+        const products = await Product.findAll({
+            where: { name: { [Op.like]: `%${query}%` } },
+            include: [Variant, Category]
+        });
+        return res.status(200).json(products);
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.addVariant = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const { sku, price, stock, attributes } = req.body;
+
+        const variant = await Variant.create({ productId, sku, price, stock });
+
+        if (attributes && Array.isArray(attributes)) {
+            for (const attr of attributes) {
+                await VariantAttribute.create({
+                    variantId: variant.id,
+                    name: attr.name,
+                    value: attr.value
+                });
+            }
+        }
+
+        return res.status(201).json({ message: 'Variant added', variant });
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.updateVariant = async (req, res) => {
+    try {
+        const { variantId } = req.params;
+        const { sku, price, stock } = req.body;
+
+        const variant = await Variant.findByPk(variantId);
+        if (!variant) return res.status(404).json({ message: 'Variant not found' });
+
+        await variant.update({ sku, price, stock });
+        return res.status(200).json({ message: 'Variant updated', variant });
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.deleteVariant = async (req, res) => {
+    try {
+        const { variantId } = req.params;
+        await Variant.destroy({ where: { id: variantId } });
+        return res.status(200).json({ message: 'Variant deleted' });
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.addToCart = async (req, res) => {
+    try {
+        const { userId, productId, quantity } = req.body;
+        const cartItem = await Cart.create({ userId, productId, quantity });
+        return res.status(201).json({ message: 'Added to cart', cartItem });
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.getCart = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const cart = await Cart.findAll({ where: { userId } });
+        return res.status(200).json(cart);
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.removeFromCart = async (req, res) => {
+    try {
+        const { userId, productId } = req.params;
+        await Cart.destroy({ where: { userId, productId } });
+        return res.status(200).json({ message: 'Removed from cart' });
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.getOrdersByUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const orders = await Order.findAll({
+            where: { userId },
+            include: [{ model: OrderProduct }, { model: Product }]
+        });
+        return res.status(200).json(orders);
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
