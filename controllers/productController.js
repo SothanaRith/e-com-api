@@ -217,8 +217,13 @@ exports.getProductById = async (req, res) => {
                 },
                 {
                     model: Review,
-                    attributes: ['id', 'rating', 'comment'],
+                    attributes: ['id', 'rating', 'comment', 'userId', 'imageUrl'],
                     required: false,
+                    include: [{
+                        model: User,
+                        as: 'user',
+                        attributes: ['id', 'name', 'email']
+                    }]
                 },
                 {
                     model: Product,
@@ -396,10 +401,17 @@ exports.addReview = async (req, res) => {
     try {
         const { productId, userId, rating, comment } = req.body;
 
+        // Parse uploaded files if any
+        const imageArray = req.files && req.files.length > 0
+            ? req.files.map(file => `/uploads/${file.filename}`)
+            : null;
+
+        // Validate required fields
         if (!productId || !userId || !rating) {
             return res.status(400).json({ message: "productId, userId, and rating are required" });
         }
 
+        // Check if product and user exist
         const [product, user] = await Promise.all([
             Product.findByPk(productId),
             User.findByPk(userId),
@@ -408,12 +420,21 @@ exports.addReview = async (req, res) => {
         if (!product) return res.status(404).json({ message: "Product not found" });
         if (!user) return res.status(404).json({ message: "User not found" });
 
+        // Check for existing review
         const existingReview = await Review.findOne({ where: { productId, userId } });
         if (existingReview) {
             return res.status(409).json({ message: "User already reviewed this product" });
         }
 
-        const review = await Review.create({ productId, userId, rating, comment });
+        // Create review
+        const review = await Review.create({
+            productId,
+            userId,
+            rating,
+            comment,
+            imageUrl: imageArray,
+        });
+
         return res.status(201).json({ message: "Review added", review });
 
     } catch (error) {

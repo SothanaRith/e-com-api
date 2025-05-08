@@ -16,6 +16,9 @@ User.hasMany(Chat, { foreignKey: 'receiver_id', as: 'ReceivedMessages' });
 Chat.belongsTo(User, { foreignKey: 'sender_id', as: 'Sender' });
 Chat.belongsTo(User, { foreignKey: 'receiver_id', as: 'Receiver' });
 
+Review.belongsTo(User, { foreignKey: 'id', as: 'user', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+User.hasMany(Review, { foreignKey: 'id' });
+
 Category.hasMany(Product, { foreignKey: 'categoryId' })
 Product.belongsTo(Category, { foreignKey: 'categoryId' })
 

@@ -16,7 +16,7 @@ router.post("/place-order", productController.placeOrder);
 router.get("/orders/:userId", productController.getOrdersByUser);
 
 // Product reviews
-router.post("/create-reviews", productController.addReview);
+router.post("/create-reviews", upload.array('images', 5), productController.addReview);
 router.get("/product/:id/reviews", productController.getProductReviews);
 
 // Search

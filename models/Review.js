@@ -13,8 +13,11 @@ const Review = sequelize.define("Review", {
   },
   rating: { type: DataTypes.INTEGER, allowNull: false },
   comment: { type: DataTypes.TEXT },
-}, {
-  timestamps: true,
-});
+  imageUrl: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: []
+  },
+}, );
 
 module.exports = Review;
