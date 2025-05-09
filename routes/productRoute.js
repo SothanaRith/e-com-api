@@ -32,5 +32,9 @@ router.post("/cart/add", productController.addToCart);
 router.get("/cart/:userId", productController.getCart);
 router.delete("/cart/:userId/:productId", productController.removeFromCart);
 
+router.post('/wishlist', productController.addToWishlist);
+router.get('/wishlist/:userId', productController.getWishlist);
+router.delete('/wishlist/:userId/:productId', productController.removeFromWishlist);
+
 module.exports = router;
 

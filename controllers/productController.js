@@ -10,6 +10,7 @@ const RelatedProduct = require('../models/RelatedProduct')
 const Cart = require("../models/Cart");
 const path = require("path");
 const upload = require("../controllers/uploadController");
+const Wishlist = require('../models/Wishlist');
 
 exports.createProduct = async (req, res) => {
     try {
@@ -228,7 +229,7 @@ exports.getProductById = async (req, res) => {
                 {
                     model: Product,
                     as: 'RelatedProducts',
-                    attributes: ['id', 'name'],
+                    attributes: ['id', 'name', 'price'],
                     through: { attributes: [] }
                 }
             ],
@@ -552,6 +553,46 @@ exports.getOrdersByUser = async (req, res) => {
             include: [{ model: OrderProduct }, { model: Product }]
         });
         return res.status(200).json(orders);
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.addToWishlist = async (req, res) => {
+    try {
+        const { userId, productId } = req.body;
+
+        const exists = await Wishlist.findOne({ where: { userId, productId } });
+        if (exists) return res.status(409).json({ message: 'Product already in wishlist' });
+
+        const wishlist = await Wishlist.create({ userId, productId });
+        return res.status(201).json({ message: 'Added to wishlist', wishlist });
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// Get wishlist for user
+exports.getWishlist = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const wishlist = await Wishlist.findAll({
+            where: { userId },
+        });
+        return res.status(200).json(wishlist);
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+// Remove from wishlist
+exports.removeFromWishlist = async (req, res) => {
+    try {
+        const { userId, productId } = req.params;
+
+        await Wishlist.destroy({ where: { userId, productId } });
+
+        return res.status(200).json({ message: 'Removed from wishlist' });
     } catch (error) {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }

@@ -4,6 +4,7 @@ const Chat = require('./Chat');
 const Product = require('./Product');
 const Review = require('./Review')
 const Category = require('./Category')
+const Wishlist = require('./WishList')
 const Order = require('./Order')
 const OrderProduct = require('./OrderProduct')
 const Variant = require('./VariantModel')
@@ -18,6 +19,11 @@ Chat.belongsTo(User, { foreignKey: 'receiver_id', as: 'Receiver' });
 
 Review.belongsTo(User, { foreignKey: 'id', as: 'user', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 User.hasMany(Review, { foreignKey: 'id' });
+
+User.hasMany(Wishlist, { foreignKey: 'userId', onDelete: 'CASCADE' });
+Product.hasMany(Wishlist, { foreignKey: 'productId', onDelete: 'CASCADE' });
+Wishlist.belongsTo(User, { foreignKey: 'userId' });
+Wishlist.belongsTo(Product, { foreignKey: 'productId', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 
 Category.hasMany(Product, { foreignKey: 'categoryId' })
 Product.belongsTo(Category, { foreignKey: 'categoryId' })
@@ -47,6 +53,18 @@ Order.belongsTo(User, { foreignKey: "userId" });
 Order.belongsTo(Product, { foreignKey: "productId" });
 Order.belongsTo(Variant, { foreignKey: "variantId" });
 
-
 // Export models for use
-module.exports = { sequelize, User, Chat, Product, Category, Review, OrderProduct, Order};
+module.exports = {
+    sequelize,
+    User,
+    Chat,
+    Product,
+    Category,
+    Review,
+    Wishlist,
+    OrderProduct,
+    Order,
+    Variant,
+    VariantAttribute,
+    Cart,
+};
