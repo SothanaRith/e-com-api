@@ -23,7 +23,7 @@ User.hasMany(Review, { foreignKey: 'id' });
 User.hasMany(Wishlist, { foreignKey: 'userId', onDelete: 'CASCADE' });
 Product.hasMany(Wishlist, { foreignKey: 'productId', onDelete: 'CASCADE' });
 Wishlist.belongsTo(User, { foreignKey: 'userId' });
-Wishlist.belongsTo(Product, { foreignKey: 'productId', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+Wishlist.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
 
 Category.hasMany(Product, { foreignKey: 'categoryId' })
 Product.belongsTo(Category, { foreignKey: 'categoryId' })
@@ -54,7 +54,7 @@ Order.belongsTo(Product, { foreignKey: "productId" });
 Order.belongsTo(Variant, { foreignKey: "variantId" });
 
 // Export models for use
-module.exports = {
+const models = {
     sequelize,
     User,
     Chat,
@@ -68,3 +68,11 @@ module.exports = {
     VariantAttribute,
     Cart,
 };
+
+Object.values(models).forEach(model => {
+    if (typeof model.associate === 'function') {
+        model.associate(models);
+    }
+});
+
+module.exports = models;

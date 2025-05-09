@@ -1,4 +1,4 @@
-const Product = require("../models/Product");
+
 const Category = require("../models/Category");
 const Review = require("../models/Review")
 const Order = require('../models/Order')
@@ -10,7 +10,7 @@ const RelatedProduct = require('../models/RelatedProduct')
 const Cart = require("../models/Cart");
 const path = require("path");
 const upload = require("../controllers/uploadController");
-const Wishlist = require('../models/Wishlist');
+const { Wishlist, Product } = require('../models');
 
 exports.createProduct = async (req, res) => {
     try {
@@ -571,7 +571,6 @@ exports.addToWishlist = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
-
 // Get wishlist for user
 exports.getWishlist = async (req, res) => {
     try {
@@ -579,9 +578,15 @@ exports.getWishlist = async (req, res) => {
 
         const wishlist = await Wishlist.findAll({
             where: { userId },
+            include: [{
+                model: Product,
+                attributes: ['id', 'name', 'price', 'imageUrl']
+            }]
         });
+
         return res.status(200).json(wishlist);
     } catch (error) {
+        console.error('Wishlist error:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
