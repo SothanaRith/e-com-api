@@ -11,6 +11,7 @@ const Cart = require("../models/Cart");
 const path = require("path");
 const upload = require("../controllers/uploadController");
 const { Wishlist, Product } = require('../models');
+const {Op} = require("sequelize");
 
 exports.createProduct = async (req, res) => {
     try {
@@ -508,7 +509,13 @@ exports.updateVariant = async (req, res) => {
 exports.deleteVariant = async (req, res) => {
     try {
         const { variantId } = req.params;
+
+        // Delete related VariantAttribute entries first
+        await VariantAttribute.destroy({ where: { variantId } });
+
+        // Then delete the Variant
         await Variant.destroy({ where: { id: variantId } });
+
         return res.status(200).json({ message: 'Variant deleted' });
     } catch (error) {
         return res.status(500).json({ message: 'Server error', error: error.message });
@@ -517,8 +524,10 @@ exports.deleteVariant = async (req, res) => {
 
 exports.addToCart = async (req, res) => {
     try {
-        const { userId, productId, quantity } = req.body;
-        const cartItem = await Cart.create({ userId, productId, quantity });
+        const { userId, productId, quantity, priceAtPurchase } = req.body;
+
+        const cartItem = await Cart.create({ userId, productId, quantity, priceAtPurchase });
+
         return res.status(201).json({ message: 'Added to cart', cartItem });
     } catch (error) {
         return res.status(500).json({ message: 'Server error', error: error.message });

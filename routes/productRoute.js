@@ -7,7 +7,7 @@ const upload = require("../utils/fileUpload"); // File upload middleware
 router.get("/get-all", productController.getAllProducts);
 router.get("/get-product/:id", productController.getProductById);
 router.post("/create-product", upload.array('images', 5), productController.createProduct);
-router.put("/update-product/:productId", upload.array('images', 5), productController.updateProduct);
+router.post("/update-product/:productId", upload.array('images', 5), productController.updateProduct);
 router.delete("/delete/:productId", productController.deleteProduct);
 
 // Product purchase & orders
@@ -24,13 +24,13 @@ router.get("/search", productController.searchProducts);
 
 // Variant operations
 router.post("/variant/:productId/add", productController.addVariant);
-router.put("/variant/:variantId/update", productController.updateVariant);
-router.delete("/variant/:variantId", productController.deleteVariant);
+router.post("/variant/:variantId/update", productController.updateVariant);
+router.post("/variant/:variantId/delete", productController.deleteVariant);
 
 // Cart operations
 router.post("/cart/add", productController.addToCart);
 router.get("/cart/:userId", productController.getCart);
-router.delete("/cart/:userId/:productId", productController.removeFromCart);
+router.post("/cart/:userId/:productId/delete", productController.removeFromCart);
 
 router.post('/wishlist', productController.addToWishlist);
 router.get('/wishlist/:userId', productController.getWishlist);
