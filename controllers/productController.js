@@ -25,8 +25,9 @@ exports.createProduct = async (req, res) => {
             relatedProductIds,
         } = req.body;
         let totalStock = 0;
-
+        
         const imageArray = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
+        
         if (!categoryId || !name) {
             return res.status(400).json({ message: "Category ID and Product Name are required" });
         }
@@ -92,7 +93,7 @@ exports.createProduct = async (req, res) => {
                 }
             }
         }
-
+        
         const updatedProduct = await Product.findByPk(product.id, {
             include: [
                 { model: Category, attributes: ["id"] },
@@ -105,9 +106,17 @@ exports.createProduct = async (req, res) => {
                 { model: Product, as: 'RelatedProducts', attributes: ['id'], through: { attributes: [] } },
             ]
         });
-
-        return res.status(201).json({ message: "Product created successfully", product: updatedProduct });
-
+        
+        if (typeof updatedProduct.imageUrl === 'string') {
+            updatedProduct.imageUrl = JSON.parse(updatedProduct.imageUrl);
+        }
+        
+        return res.status(201).json({
+            message: "Product created successfully",
+            updatedProduct
+        });
+        
+        
     } catch (error) {
         console.error("Error creating product:", error);
         return res.status(500).json({ message: "Internal server error", error: error.message });
