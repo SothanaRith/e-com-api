@@ -1,7 +1,7 @@
-const Category = require("../models/Category");
+
 const {successResponse, failResponse} = require("../utils/baseResponse");
 const error = require("multer/lib/multer-error");
-const {Product} = require("../models");
+const { Category, Product, Review, Variant , VariantAttribute} = require('../models');
 exports.createCategory = async (req, res) => {
   try {
     const { name, description } = req.body;
@@ -115,14 +115,48 @@ exports.getProductByCategory = async (req, res) => {
   try {
     const { categoryId } = req.params;
     
-    const products = await Product.findAll({where: { categoryId },});
+    console.log("Received categoryId:", categoryId);
     
-    // You can choose to return a fail if no products found — or just empty array is fine.
+    if (!categoryId || isNaN(Number(categoryId))) {
+      return res.status(400).json(failResponse("Invalid category ID"));
+    }
+    
+    const category = await Category.findByPk(categoryId);
+    
+    if (!category) {
+      return res.status(404).json(failResponse("Category not found"));
+    }
+    
+    const products = await Product.findAll({
+      where: { categoryId },
+      include: [
+        {
+          model: Variant,
+          include: {
+            model: VariantAttribute,
+            attributes: ['name', 'value']
+          }
+        },
+        {
+          model: Review,
+          attributes: ['id', 'rating', 'comment'],
+          required: false
+        },
+        {
+          model: Product,
+          as: 'RelatedProducts', // ensure this alias matches your belongsToMany association
+          attributes: ['id', 'name'],
+          through: { attributes: [] }
+        }
+      ]
+    });
+    
     return res.status(200).json(successResponse("Products fetched successfully", products));
-    
   } catch (error) {
     console.error("Error fetching products by category:", error);
     return res.status(500).json(failResponse("Internal server error", error.message));
   }
 };
+
+
 

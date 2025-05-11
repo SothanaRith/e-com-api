@@ -23,7 +23,6 @@ const Variant = sequelize.define("Variant", {
     ],
 });
 
-Variant.belongsTo(Product, { foreignKey: "productId", as: "product" });
 
 
 module.exports = Variant;

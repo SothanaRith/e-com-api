@@ -21,9 +21,8 @@ const Product = sequelize.define("Product", {
   price: { type: DataTypes.DECIMAL(10, 2) },
   totalStock: { type: DataTypes.INTEGER },
   imageUrl: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    defaultValue: []
+    type: DataTypes.JSON, // or ARRAY if Postgres
+    defaultValue: [],
   },
   storeId: {
     type: DataTypes.INTEGER,

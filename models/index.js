@@ -53,6 +53,19 @@ Order.belongsTo(User, { foreignKey: "userId" });
 Order.belongsTo(Product, { foreignKey: "productId" });
 Order.belongsTo(Variant, { foreignKey: "variantId" });
 
+Product.hasMany(Variant, { foreignKey: 'productId' });
+Variant.belongsTo(Product, { foreignKey: 'productId' });
+
+Variant.hasMany(VariantAttribute, { foreignKey: 'variantId' });
+VariantAttribute.belongsTo(Variant, { foreignKey: 'variantId' });
+
+Product.hasMany(Review, { foreignKey: 'productId' });
+Review.belongsTo(Product, { foreignKey: 'productId' });
+
+// Product.hasMany(Review, { foreignKey: 'productId', as: 'Reviews' });
+// Product.hasMany(Variant, { foreignKey: 'productId', as: 'Product' });
+
+
 // Export models for use
 const models = {
     sequelize,
