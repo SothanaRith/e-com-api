@@ -13,6 +13,12 @@ const contentRoutes = require("./routes/contentRoutes");
 const categoryRoute = require("./routes/categoryRoute");
 const productRoute = require("./routes/productRoute");
 const loadHomeRoute = require("./routes/loadHomeRoute");
+const sampleCategories = require("./helpers/sampleCategories");
+const Category = require("./models/Category");
+const sampleReviews = require("./helpers/sampleReviews");
+const Review = require("./models/Review");
+const {Product} = require("./models");
+const sampleProducts = require("./helpers/sampleProducts");
 
 const app = express();
 
@@ -39,6 +45,46 @@ sequelize.sync({ alter: true }).then(() => {
   console.log('Database synced');
   const PORT = 3000;
   app.listen(PORT, () => {
+    async function insertCategories() {
+      try {
+        for (const categoryData of sampleCategories) {
+          await Category.create(categoryData);
+        }
+        console.log('Categories inserted successfully');
+      } catch (error) {
+        console.error('Error inserting categories:', error);
+      }
+    }
+
+// Insert reviews
+    async function insertReviews() {
+      try {
+        for (const reviewData of sampleReviews) {
+          await Review.create(reviewData);
+        }
+        console.log('Reviews inserted successfully');
+      } catch (error) {
+        console.error('Error inserting reviews:', error);
+      }
+    }
+
+    async function insertSampleProducts() {
+      try {
+        for (const productData of sampleProducts) {
+          await Product.create(productData);
+        }
+        console.log('Sample products inserted successfully');
+      } catch (error) {
+        console.error('Error inserting sample products:', error);
+      }
+    }
+
+// Insert all data
+//     async function insertSampleData() {
+//       await insertCategories();
+//       await insertSampleProducts();
+//     }
+//     insertSampleData();
     console.log(`Server running on http://localhost:${PORT}`);
   });
 });
