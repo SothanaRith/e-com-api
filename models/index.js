@@ -17,7 +17,7 @@ User.hasMany(Chat, { foreignKey: 'receiver_id', as: 'ReceivedMessages' });
 Chat.belongsTo(User, { foreignKey: 'sender_id', as: 'Sender' });
 Chat.belongsTo(User, { foreignKey: 'receiver_id', as: 'Receiver' });
 
-Review.belongsTo(User, { foreignKey: 'id', as: 'user', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+Review.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 User.hasMany(Review, { foreignKey: 'id' });
 
 User.hasMany(Wishlist, { foreignKey: 'userId', onDelete: 'CASCADE' });

@@ -80,11 +80,12 @@ sequelize.sync({ alter: true }).then(() => {
     }
 
 // Insert all data
-//     async function insertSampleData() {
-//       await insertCategories();
-//       await insertSampleProducts();
-//     }
-//     insertSampleData();
+    async function insertSampleData() {
+      // await insertCategories()
+      // await insertSampleProducts()
+      // await insertReviews()
+    }
+    insertSampleData();
     console.log(`Server running on http://localhost:${PORT}`);
   });
 });
