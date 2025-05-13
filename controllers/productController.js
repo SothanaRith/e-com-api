@@ -141,7 +141,12 @@ exports.getAllProducts = async (req, res) => {
                 {
                     model: Review,
                     attributes: ['id', 'rating', 'comment'],
-                    required: false
+                    required: false,
+                    include: [{
+                        model: User,
+                        as: 'user',
+                        attributes: ['id', 'name', 'email']
+                    }]
                 },
                 {
                     model: Product,

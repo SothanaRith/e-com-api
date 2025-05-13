@@ -15,10 +15,13 @@ const productRoute = require("./routes/productRoute");
 const loadHomeRoute = require("./routes/loadHomeRoute");
 const sampleCategories = require("./helpers/sampleCategories");
 const Category = require("./models/Category");
+const Variant = require("./models/VariantModel");
+const VariantAttribute = require("./models/VariantAttributeModel");
 const sampleReviews = require("./helpers/sampleReviews");
 const Review = require("./models/Review");
 const {Product} = require("./models");
 const sampleProducts = require("./helpers/sampleProducts");
+const sampleVariants = require("./helpers/sampleVariants");
 
 const app = express();
 
@@ -79,11 +82,40 @@ sequelize.sync({ alter: true }).then(() => {
       }
     }
 
+    async function insertVariants() {
+      try {
+        for (const variantData of sampleVariants) {
+          // Create the variant record
+          const variant = await Variant.create({
+            productId: variantData.productId,
+            sku: variantData.sku,
+            price: variantData.price,
+            stock: variantData.stock,
+          });
+
+          // Create variant attributes (e.g., Color, Size)
+          if (variantData.attributes && Array.isArray(variantData.attributes)) {
+            for (const attribute of variantData.attributes) {
+              await VariantAttribute.create({
+                variantId: variant.id,
+                name: attribute.name,
+                value: attribute.value,
+              });
+            }
+          }
+        }
+        console.log('Variants inserted successfully');
+      } catch (error) {
+        console.error('Error inserting variants:', error);
+      }
+    }
+
 // Insert all data
     async function insertSampleData() {
       // await insertCategories()
       // await insertSampleProducts()
       // await insertReviews()
+      // await insertVariants()
     }
     insertSampleData();
     console.log(`Server running on http://localhost:${PORT}`);
