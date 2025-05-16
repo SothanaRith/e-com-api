@@ -21,6 +21,7 @@ router.get("/product/:id/reviews", productController.getProductReviews);
 
 // Search
 router.get("/search", productController.searchProducts);
+router.get('/product/filter', productController.filterProducts);
 
 // Variant operations
 router.post("/variant/:productId/add", productController.addVariant);

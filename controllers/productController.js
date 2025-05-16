@@ -272,7 +272,6 @@ exports.getProductById = async (req, res) => {
     }
 };
 
-
 exports.placeOrder = async (req, res) => {
     const { userId, items, paymentType } = req.body;
 
@@ -491,6 +490,85 @@ exports.searchProducts = async (req, res) => {
         return res.status(200).json(products);
     } catch (error) {
         return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.filterProducts = async (req, res) => {
+    try {
+        const {
+            categoryId,
+            minPrice,
+            maxPrice,
+            name,
+            minRating,
+            maxRating,
+            variantSku,
+        } = req.query;
+
+        // Build where conditions for Product
+        const productWhere = {};
+        if (categoryId) productWhere.categoryId = categoryId;
+        if (minPrice) productWhere.price = { ...(productWhere.price || {}), [Op.gte]: parseFloat(minPrice) };
+        if (maxPrice) productWhere.price = { ...(productWhere.price || {}), [Op.lte]: parseFloat(maxPrice) };
+        if (name) productWhere.name = { [Op.like]: `%${name}%` };
+
+        // Build having conditions for rating aggregate (optional)
+        // We can join Review and group by Product.id to filter by average rating
+
+        // Base query
+        const products = await Product.findAll({
+            where: productWhere,
+            include: [
+                {
+                    model: Category,
+                    attributes: ['id', 'name']
+                },
+                {
+                    model: Variant,
+                    attributes: ['id', 'sku', 'price', 'stock'],
+                    include: [{
+                        model: VariantAttribute,
+                        attributes: ['name', 'value']
+                    }],
+                    ...(variantSku ? { where: { sku: variantSku } } : {}),
+                },
+                {
+                    model: Review,
+                    attributes: [],
+                    required: false,
+                },
+                {
+                    model: Product,
+                    as: 'RelatedProducts',
+                    attributes: ['id', 'name'],
+                    through: { attributes: [] }
+                }
+            ],
+            attributes: {
+                include: [
+                    // Average rating attribute
+                    [
+                        // Sequelize.fn('AVG', Sequelize.col('Reviews.rating')),
+                        Product.sequelize.fn('AVG', Product.sequelize.col('Reviews.rating')),
+                        'avgRating'
+                    ]
+                ]
+            },
+            group: ['Product.id', 'Category.id', 'Variants.id', 'Variants->VariantAttributes.id', 'RelatedProducts.id'],
+            having: minRating || maxRating ? Product.sequelize.where(
+                Product.sequelize.fn('AVG', Product.sequelize.col('Reviews.rating')),
+                (minRating && maxRating)
+                    ? { [Op.between]: [parseFloat(minRating), parseFloat(maxRating)] }
+                    : (minRating ? { [Op.gte]: parseFloat(minRating) } : { [Op.lte]: parseFloat(maxRating) })
+            ) : undefined,
+            order: [['createdAt', 'DESC']],
+        });
+
+        return res.status(200).json(products);
+
+    } catch (error) {
+        console.error('Error filtering products:', error);
+        return res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 };
 
