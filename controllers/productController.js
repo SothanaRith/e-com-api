@@ -11,7 +11,7 @@ const Cart = require("../models/Cart");
 const path = require("path");
 const upload = require("../controllers/uploadController");
 const { Wishlist, Product } = require('../models');
-const {Op} = require("sequelize");
+const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
 
 exports.createProduct = async (req, res) => {
     try {
@@ -482,40 +482,46 @@ exports.getProductReviews = async (req, res) => {
 
 exports.searchProducts = async (req, res) => {
     try {
-        const { query } = req.query;
-        const products = await Product.findAll({
-            where: { name: { [Op.like]: `%${query}%` } },
-            include: [Variant, Category]
-        });
-        return res.status(200).json(products);
-    } catch (error) {
-        return res.status(500).json({ message: 'Server error', error: error.message });
-    }
-};
-
-exports.filterProducts = async (req, res) => {
-    try {
         const {
+            query,        // for name search
             categoryId,
             minPrice,
             maxPrice,
-            name,
             minRating,
             maxRating,
             variantSku,
         } = req.query;
 
-        // Build where conditions for Product
+        // Build WHERE for Product
         const productWhere = {};
-        if (categoryId) productWhere.categoryId = categoryId;
-        if (minPrice) productWhere.price = { ...(productWhere.price || {}), [Op.gte]: parseFloat(minPrice) };
-        if (maxPrice) productWhere.price = { ...(productWhere.price || {}), [Op.lte]: parseFloat(maxPrice) };
-        if (name) productWhere.name = { [Op.like]: `%${name}%` };
+        if (query) {
+            productWhere.name = { [Op.like]: `%${query}%` };
+        }
+        if (categoryId) {
+            productWhere.categoryId = categoryId;
+        }
+        if (minPrice || maxPrice) {
+            productWhere.price = {
+                ...(minPrice && { [Op.gte]: parseFloat(minPrice) }),
+                ...(maxPrice && { [Op.lte]: parseFloat(maxPrice) })
+            };
+        }
 
-        // Build having conditions for rating aggregate (optional)
-        // We can join Review and group by Product.id to filter by average rating
+        // Build HAVING for average rating
+        let havingCondition;
+        if (minRating || maxRating) {
+            const avgRating = fn('AVG', col('Reviews.rating'));
+            if (minRating && maxRating) {
+                havingCondition = sequelizeWhere(avgRating, {
+                    [Op.between]: [parseFloat(minRating), parseFloat(maxRating)]
+                });
+            } else if (minRating) {
+                havingCondition = sequelizeWhere(avgRating, { [Op.gte]: parseFloat(minRating) });
+            } else {
+                havingCondition = sequelizeWhere(avgRating, { [Op.lte]: parseFloat(maxRating) });
+            }
+        }
 
-        // Base query
         const products = await Product.findAll({
             where: productWhere,
             include: [
@@ -530,12 +536,12 @@ exports.filterProducts = async (req, res) => {
                         model: VariantAttribute,
                         attributes: ['name', 'value']
                     }],
-                    ...(variantSku ? { where: { sku: variantSku } } : {}),
+                    ...(variantSku ? { where: { sku: variantSku } } : {})
                 },
                 {
                     model: Review,
                     attributes: [],
-                    required: false,
+                    required: false
                 },
                 {
                     model: Product,
@@ -546,29 +552,24 @@ exports.filterProducts = async (req, res) => {
             ],
             attributes: {
                 include: [
-                    // Average rating attribute
-                    [
-                        // Sequelize.fn('AVG', Sequelize.col('Reviews.rating')),
-                        Product.sequelize.fn('AVG', Product.sequelize.col('Reviews.rating')),
-                        'avgRating'
-                    ]
+                    [fn('AVG', col('Reviews.rating')), 'avgRating']
                 ]
             },
-            group: ['Product.id', 'Category.id', 'Variants.id', 'Variants->VariantAttributes.id', 'RelatedProducts.id'],
-            having: minRating || maxRating ? Product.sequelize.where(
-                Product.sequelize.fn('AVG', Product.sequelize.col('Reviews.rating')),
-                (minRating && maxRating)
-                    ? { [Op.between]: [parseFloat(minRating), parseFloat(maxRating)] }
-                    : (minRating ? { [Op.gte]: parseFloat(minRating) } : { [Op.lte]: parseFloat(maxRating) })
-            ) : undefined,
-            order: [['createdAt', 'DESC']],
+            group: [
+                'Product.id',
+                'Category.id',
+                'Variants.id',
+                'Variants->VariantAttributes.id',
+                'RelatedProducts.id'
+            ],
+            having: havingCondition,
+            order: [['createdAt', 'DESC']]
         });
 
         return res.status(200).json(products);
-
     } catch (error) {
-        console.error('Error filtering products:', error);
-        return res.status(500).json({ message: 'Internal server error', error: error.message });
+        console.error('Error searching products:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
 
