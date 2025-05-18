@@ -13,6 +13,7 @@ const contentRoutes = require("./routes/contentRoutes");
 const categoryRoute = require("./routes/categoryRoute");
 const productRoute = require("./routes/productRoute");
 const loadHomeRoute = require("./routes/loadHomeRoute");
+const vendorRoute = require("./routes/venderRoute");
 const sampleCategories = require("./helpers/sampleCategories");
 const Category = require("./models/Category");
 const Variant = require("./models/VariantModel");
@@ -42,11 +43,12 @@ app.use("/api/contents", contentRoutes);
 app.use("/api/category", categoryRoute);
 app.use("/api/product", productRoute);
 app.use("/api/home", loadHomeRoute);
+app.use("/api/vendor", vendorRoute);
 
 // Sync database and start server
 sequelize.sync({ alter: true }).then(() => {
   console.log('Database synced');
-  const PORT = 3000;
+  const PORT = 6000;
   app.listen(PORT, () => {
     async function insertCategories() {
       try {
@@ -111,13 +113,13 @@ sequelize.sync({ alter: true }).then(() => {
     }
 
 // Insert all data
-    async function insertSampleData() {
-      // await insertCategories()
-      // await insertSampleProducts()
-      // await insertReviews()
-      // await insertVariants()
-    }
-    insertSampleData();
+//     async function insertSampleData() {
+//       await insertCategories()
+//       await insertSampleProducts()
+//       await insertReviews()
+//       await insertVariants()
+//     }
+//     insertSampleData();
     console.log(`Server running on http://localhost:${PORT}`);
   });
 });

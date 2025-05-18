@@ -2,11 +2,11 @@ const express = require("express");
 const router = express.Router();
 const productController = require("../controllers/productController");
 const upload = require("../utils/fileUpload"); // File upload middleware
-
+const {allowRole, authenticateToken} = require("../middleware/authenticateToken");
 // Core product operations
 router.get("/get-all", productController.getAllProducts);
 router.get("/get-product/:id", productController.getProductById);
-router.post("/create-product", upload.array('images', 5), productController.createProduct);
+router.post("/create-product", authenticateToken,  allowRole.vendorOrAdmin, upload.array('images', 5), productController.createProduct);
 router.post("/update-product/:productId", upload.array('images', 5), productController.updateProduct);
 router.delete("/delete/:productId", productController.deleteProduct);
 

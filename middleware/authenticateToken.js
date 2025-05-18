@@ -5,6 +5,28 @@ const { User } = require('../models');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+const allowRoles = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user || !req.user.role) {
+      return res.status(401).json({ error: 'Unauthorized: No user info' });
+    }
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied: insufficient permissions' });
+    }
+    next();
+  };
+};
+
+//  Dynamic dot-access helper
+const allowRole = {
+  user: allowRoles('user'),
+  vendor: allowRoles('vendor'),
+  admin: allowRoles('admin'),
+  vendorOrAdmin: allowRoles('vendor', 'admin'),
+  userOrVendor: allowRoles('user', 'vendor'),
+  userOrVendorOrAdmin: allowRoles('user', 'vendor', 'admin'),
+};
+
 const authenticateToken = async (req, res, next) => {
   const encryptedToken = req.header('Authorization')?.split(' ')[1];
 
@@ -22,7 +44,7 @@ const authenticateToken = async (req, res, next) => {
     }
 
     if (decoded.tokenVersion !== user.tokenVersion) {
-      return res.status(401).json({ success: false, message: 'Token expired. Please re-login.' });
+      return res.status(401).json({ success: false, message: 'Token expired. Please re-login.'});
     }
 
     req.user = { id: user.id, role: user.role };
@@ -34,4 +56,4 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticateToken };
+module.exports = { authenticateToken, allowRole};
