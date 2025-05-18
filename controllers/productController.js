@@ -11,7 +11,11 @@ const Cart = require("../models/Cart");
 const path = require("path");
 const upload = require("../controllers/uploadController");
 const { Wishlist, Product } = require('../models');
-const {Op} = require("sequelize");
+const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
+const jwt = require('jsonwebtoken');
+const { encrypt, decrypt, generateTokens } = require('../utils/crypto');
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 exports.createProduct = async (req, res) => {
     try {
@@ -125,6 +129,16 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
     try {
+        const token = req.header('Authorization')?.split(' ')[1];
+
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Access token required' });
+        }
+
+        // Verify and decode the token
+        const decoded = jwt.verify(decrypt(token), JWT_SECRET);
+        const userId = decoded.id;
+
         const products = await Product.findAll({
             include: [
                 {
@@ -153,10 +167,25 @@ exports.getAllProducts = async (req, res) => {
                     as: 'RelatedProducts',
                     attributes: ['id', 'name'],
                     through: { attributes: [] }
+                },
+                {
+                    model: Wishlist,
+                    attributes: ['id'],  // just need to know if exists
+                    where: userId ? { userId } : undefined,
+                    required: false,  // important: false means left join
                 }
             ]
         });
-        return res.status(200).json(products);
+
+        // Transform result to add isInWishlist boolean
+        const productsWithWishlist = products.map(product => {
+            const productJSON = product.toJSON();
+            productJSON.isInWishlist = productJSON.Wishlists && productJSON.Wishlists.length > 0;
+            delete productJSON.Wishlists;  // remove raw wishlist data if you want
+            return productJSON;
+        });
+
+        return res.status(200).json(productsWithWishlist);
     } catch (error) {
         console.error("Error fetching products:", error);
         return res.status(500).json({ message: "Internal server error", error: error.message });
@@ -216,6 +245,16 @@ exports.getProductById = async (req, res) => {
     try {
         const { id } = req.params;
         console.log("Product ID:", id);
+
+        const token = req.header('Authorization')?.split(' ')[1];
+
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Access token required' });
+        }
+
+        // Verify and decode the token
+        const decoded = jwt.verify(decrypt(token), JWT_SECRET);
+        const userId = decoded.id;
         
         const product = await Product.findByPk(id, {
             include: [
@@ -246,6 +285,12 @@ exports.getProductById = async (req, res) => {
                     as: 'RelatedProducts',
                     attributes: ['id', 'name', 'price'],
                     through: { attributes: [] }
+                },
+                {
+                    model: Wishlist,
+                    attributes: ['id'],
+                    where: userId ? { userId } : undefined,
+                    required: false,
                 }
             ],
         });
@@ -271,7 +316,6 @@ exports.getProductById = async (req, res) => {
         res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
-
 
 exports.placeOrder = async (req, res) => {
     const { userId, items, paymentType } = req.body;
@@ -483,13 +527,110 @@ exports.getProductReviews = async (req, res) => {
 
 exports.searchProducts = async (req, res) => {
     try {
-        const { query } = req.query;
+
+        const token = req.header('Authorization')?.split(' ')[1];
+
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Access token required' });
+        }
+
+        // Verify and decode the token
+        const decoded = jwt.verify(decrypt(token), JWT_SECRET);
+        const userId = decoded.id;
+
+        const {
+            query,        // for name search
+            categoryId,
+            minPrice,
+            maxPrice,
+            minRating,
+            maxRating,
+            variantSku,
+        } = req.query;
+
+        // Build WHERE for Product
+        const productWhere = {};
+        if (query) {
+            productWhere.name = { [Op.like]: `%${query}%` };
+        }
+        if (categoryId) {
+            productWhere.categoryId = categoryId;
+        }
+        if (minPrice || maxPrice) {
+            productWhere.price = {
+                ...(minPrice && { [Op.gte]: parseFloat(minPrice) }),
+                ...(maxPrice && { [Op.lte]: parseFloat(maxPrice) })
+            };
+        }
+
+        // Build HAVING for average rating
+        let havingCondition;
+        if (minRating || maxRating) {
+            const avgRating = fn('AVG', col('Reviews.rating'));
+            if (minRating && maxRating) {
+                havingCondition = sequelizeWhere(avgRating, {
+                    [Op.between]: [parseFloat(minRating), parseFloat(maxRating)]
+                });
+            } else if (minRating) {
+                havingCondition = sequelizeWhere(avgRating, { [Op.gte]: parseFloat(minRating) });
+            } else {
+                havingCondition = sequelizeWhere(avgRating, { [Op.lte]: parseFloat(maxRating) });
+            }
+        }
+
         const products = await Product.findAll({
-            where: { name: { [Op.like]: `%${query}%` } },
-            include: [Variant, Category]
+            where: productWhere,
+            include: [
+                {
+                    model: Category,
+                    attributes: ['id', 'name']
+                },
+                {
+                    model: Variant,
+                    attributes: ['id', 'sku', 'price', 'stock'],
+                    include: [{
+                        model: VariantAttribute,
+                        attributes: ['name', 'value']
+                    }],
+                    ...(variantSku ? { where: { sku: variantSku } } : {})
+                },
+                {
+                    model: Review,
+                    attributes: [],
+                    required: false
+                },
+                {
+                    model: Product,
+                    as: 'RelatedProducts',
+                    attributes: ['id', 'name'],
+                    through: { attributes: [] }
+                },
+                {
+                    model: Wishlist,
+                    attributes: ['id'],
+                    where: userId ? { userId } : undefined,
+                    required: false
+                }
+            ],
+            attributes: {
+                include: [
+                    [fn('AVG', col('Reviews.rating')), 'avgRating']
+                ]
+            },
+            group: [
+                'Product.id',
+                'Category.id',
+                'Variants.id',
+                'Variants->VariantAttributes.id',
+                'RelatedProducts.id'
+            ],
+            having: havingCondition,
+            order: [['createdAt', 'DESC']]
         });
+
         return res.status(200).json(products);
     } catch (error) {
+        console.error('Error searching products:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
@@ -616,7 +757,14 @@ exports.getWishlist = async (req, res) => {
             include: [{
                 model: Product,
                 attributes: ['id', 'name', 'price', 'imageUrl']
-            }]
+            },
+                {
+                    model: Wishlist,
+                    attributes: ['id'],
+                    where: userId ? { userId } : undefined,
+                    required: false
+                }
+            ]
         });
 
         return res.status(200).json(wishlist);
