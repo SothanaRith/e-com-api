@@ -12,6 +12,10 @@ const path = require("path");
 const upload = require("../controllers/uploadController");
 const { Wishlist, Product } = require('../models');
 const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
+const jwt = require('jsonwebtoken');
+const { encrypt, decrypt, generateTokens } = require('../utils/crypto');
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 exports.createProduct = async (req, res) => {
     try {
@@ -125,6 +129,16 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
     try {
+        const token = req.header('Authorization')?.split(' ')[1];
+
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Access token required' });
+        }
+
+        // Verify and decode the token
+        const decoded = jwt.verify(decrypt(token), JWT_SECRET);
+        const userId = decoded.id;
+
         const products = await Product.findAll({
             include: [
                 {
@@ -153,10 +167,25 @@ exports.getAllProducts = async (req, res) => {
                     as: 'RelatedProducts',
                     attributes: ['id', 'name'],
                     through: { attributes: [] }
+                },
+                {
+                    model: Wishlist,
+                    attributes: ['id'],  // just need to know if exists
+                    where: userId ? { userId } : undefined,
+                    required: false,  // important: false means left join
                 }
             ]
         });
-        return res.status(200).json(products);
+
+        // Transform result to add isInWishlist boolean
+        const productsWithWishlist = products.map(product => {
+            const productJSON = product.toJSON();
+            productJSON.isInWishlist = productJSON.Wishlists && productJSON.Wishlists.length > 0;
+            delete productJSON.Wishlists;  // remove raw wishlist data if you want
+            return productJSON;
+        });
+
+        return res.status(200).json(productsWithWishlist);
     } catch (error) {
         console.error("Error fetching products:", error);
         return res.status(500).json({ message: "Internal server error", error: error.message });
@@ -216,6 +245,16 @@ exports.getProductById = async (req, res) => {
     try {
         const { id } = req.params;
         console.log("Product ID:", id);
+
+        const token = req.header('Authorization')?.split(' ')[1];
+
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Access token required' });
+        }
+
+        // Verify and decode the token
+        const decoded = jwt.verify(decrypt(token), JWT_SECRET);
+        const userId = decoded.id;
         
         const product = await Product.findByPk(id, {
             include: [
@@ -246,6 +285,12 @@ exports.getProductById = async (req, res) => {
                     as: 'RelatedProducts',
                     attributes: ['id', 'name', 'price'],
                     through: { attributes: [] }
+                },
+                {
+                    model: Wishlist,
+                    attributes: ['id'],
+                    where: userId ? { userId } : undefined,
+                    required: false,
                 }
             ],
         });
@@ -482,6 +527,17 @@ exports.getProductReviews = async (req, res) => {
 
 exports.searchProducts = async (req, res) => {
     try {
+
+        const token = req.header('Authorization')?.split(' ')[1];
+
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Access token required' });
+        }
+
+        // Verify and decode the token
+        const decoded = jwt.verify(decrypt(token), JWT_SECRET);
+        const userId = decoded.id;
+
         const {
             query,        // for name search
             categoryId,
@@ -548,6 +604,12 @@ exports.searchProducts = async (req, res) => {
                     as: 'RelatedProducts',
                     attributes: ['id', 'name'],
                     through: { attributes: [] }
+                },
+                {
+                    model: Wishlist,
+                    attributes: ['id'],
+                    where: userId ? { userId } : undefined,
+                    required: false
                 }
             ],
             attributes: {
@@ -695,7 +757,14 @@ exports.getWishlist = async (req, res) => {
             include: [{
                 model: Product,
                 attributes: ['id', 'name', 'price', 'imageUrl']
-            }]
+            },
+                {
+                    model: Wishlist,
+                    attributes: ['id'],
+                    where: userId ? { userId } : undefined,
+                    required: false
+                }
+            ]
         });
 
         return res.status(200).json(wishlist);
