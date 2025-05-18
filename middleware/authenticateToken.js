@@ -55,5 +55,15 @@ const authenticateToken = async (req, res, next) => {
     res.status(401).json({ success: false, message: 'Invalid or expired token.', error: error.message });
   }
 };
-
-module.exports = { authenticateToken, allowRole};
+const vendorOnly = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+  
+  if (req.user.role !== 'vendor' || req.user.status !== 'approved') {
+    return res.status(403).json({ message: 'Vendor access denied or not approved yet' });
+  }
+  
+  next();
+};
+module.exports = { authenticateToken, allowRole, vendorOnly};

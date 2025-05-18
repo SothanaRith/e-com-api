@@ -13,7 +13,9 @@ const contentRoutes = require("./routes/contentRoutes");
 const categoryRoute = require("./routes/categoryRoute");
 const productRoute = require("./routes/productRoute");
 const loadHomeRoute = require("./routes/loadHomeRoute");
-const vendorRoute = require("./routes/venderRoute");
+const vendorRoute = require("./routes/vendorRoute");
+const adminRoute = require("./routes/adminRoute");
+
 const sampleCategories = require("./helpers/sampleCategories");
 const Category = require("./models/Category");
 const Variant = require("./models/VariantModel");
@@ -23,6 +25,7 @@ const Review = require("./models/Review");
 const {Product} = require("./models");
 const sampleProducts = require("./helpers/sampleProducts");
 const sampleVariants = require("./helpers/sampleVariants");
+
 
 const app = express();
 
@@ -44,6 +47,7 @@ app.use("/api/category", categoryRoute);
 app.use("/api/product", productRoute);
 app.use("/api/home", loadHomeRoute);
 app.use("/api/vendor", vendorRoute);
+app.use("/api/admin", adminRoute);
 
 // Sync database and start server
 sequelize.sync({ alter: true }).then(() => {
