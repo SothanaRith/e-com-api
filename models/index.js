@@ -10,6 +10,7 @@ const OrderProduct = require('./OrderProduct')
 const Variant = require('./VariantModel')
 const VariantAttribute = require('./VariantAttributeModel')
 const Cart = require('./Cart')
+const  Shop = require('./Shop');
 
 // Define associations here
 User.hasMany(Chat, { foreignKey: 'sender_id', as: 'SentMessages' });
@@ -17,13 +18,18 @@ User.hasMany(Chat, { foreignKey: 'receiver_id', as: 'ReceivedMessages' });
 Chat.belongsTo(User, { foreignKey: 'sender_id', as: 'Sender' });
 Chat.belongsTo(User, { foreignKey: 'receiver_id', as: 'Receiver' });
 
-Review.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+Review.belongsTo(User, { foreignKey: 'id', as: 'user', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 User.hasMany(Review, { foreignKey: 'id' });
 
 User.hasMany(Wishlist, { foreignKey: 'userId', onDelete: 'CASCADE' });
 Product.hasMany(Wishlist, { foreignKey: 'productId', onDelete: 'CASCADE' });
 Wishlist.belongsTo(User, { foreignKey: 'userId' });
 Wishlist.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
+
+
+User.hasMany(Shop, { foreignKey: 'vendorId', as: 'shops' });
+Shop.belongsTo(User, { foreignKey: 'vendorId', as: 'vendor' });
+
 
 Category.hasMany(Product, { foreignKey: 'categoryId' })
 Product.belongsTo(Category, { foreignKey: 'categoryId' })

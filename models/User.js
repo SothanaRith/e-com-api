@@ -32,8 +32,16 @@ const User = sequelize.define('User', {
 
   password: { type: DataTypes.STRING, allowNull: false },
   phone: { type: DataTypes.STRING },
-  role: { type: DataTypes.ENUM("buyer", "seller", "admin"), allowNull: false },
-  status: { type: DataTypes.STRING, defaultValue: 'active' },
+  role: {
+    type: DataTypes.ENUM("buyer", "seller", "vendor", "admin"),
+    allowNull: false,
+    defaultValue: "buyer"
+  },
+  status: {
+    type: DataTypes.ENUM('pending', 'pending_approval', 'approved', 'rejected'),
+    defaultValue: 'pending',
+  },
+  
   lastActive: { type: DataTypes.DATE, allowNull: true },
   createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   updatedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }, 
