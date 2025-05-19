@@ -527,15 +527,7 @@ exports.getProductReviews = async (req, res) => {
 exports.searchProducts = async (req, res) => {
     try {
 
-        const token = req.header('Authorization')?.split(' ')[1];
-
-        if (!token) {
-            return res.status(401).json({ success: false, message: 'Access token required' });
-        }
-
-        // Verify and decode the token
-        const decoded = jwt.verify(decrypt(token), JWT_SECRET);
-        const userId = decoded.id;
+        const { userId } = req.params;
 
         const {
             query,        // for name search
