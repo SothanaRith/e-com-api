@@ -129,15 +129,7 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
     try {
-        const token = req.header('Authorization')?.split(' ')[1];
-
-        if (!token) {
-            return res.status(401).json({ success: false, message: 'Access token required' });
-        }
-
-        // Verify and decode the token
-        const decoded = jwt.verify(decrypt(token), JWT_SECRET);
-        const userId = decoded.id;
+        const { userId } = req.params;
 
         const products = await Product.findAll({
             include: [
@@ -243,19 +235,8 @@ exports.updateProduct = async (req, res) => {
 
 exports.getProductById = async (req, res) => {
     try {
-        const { id } = req.params;
-        console.log("Product ID:", id);
+        const { id, userId } = req.params;
 
-        const token = req.header('Authorization')?.split(' ')[1];
-
-        if (!token) {
-            return res.status(401).json({ success: false, message: 'Access token required' });
-        }
-
-        // Verify and decode the token
-        const decoded = jwt.verify(decrypt(token), JWT_SECRET);
-        const userId = decoded.id;
-        
         const product = await Product.findByPk(id, {
             include: [
                 {
@@ -527,50 +508,25 @@ exports.getProductReviews = async (req, res) => {
 
 exports.searchProducts = async (req, res) => {
     try {
+        const { userId } = req.params;
+        const { query, categoryId, minPrice, maxPrice, minRating, maxRating, variantSku } = req.query;
 
-        const token = req.header('Authorization')?.split(' ')[1];
-
-        if (!token) {
-            return res.status(401).json({ success: false, message: 'Access token required' });
-        }
-
-        // Verify and decode the token
-        const decoded = jwt.verify(decrypt(token), JWT_SECRET);
-        const userId = decoded.id;
-
-        const {
-            query,        // for name search
-            categoryId,
-            minPrice,
-            maxPrice,
-            minRating,
-            maxRating,
-            variantSku,
-        } = req.query;
-
-        // Build WHERE for Product
         const productWhere = {};
-        if (query) {
-            productWhere.name = { [Op.like]: `%${query}%` };
-        }
-        if (categoryId) {
-            productWhere.categoryId = categoryId;
-        }
+        if (query) productWhere.name = { [Op.like]: `%${query}%` };
+        if (categoryId) productWhere.categoryId = categoryId;
         if (minPrice || maxPrice) {
             productWhere.price = {
                 ...(minPrice && { [Op.gte]: parseFloat(minPrice) }),
-                ...(maxPrice && { [Op.lte]: parseFloat(maxPrice) })
+                ...(maxPrice && { [Op.lte]: parseFloat(maxPrice) }),
             };
         }
 
-        // Build HAVING for average rating
+        // Build HAVING for avg rating
         let havingCondition;
         if (minRating || maxRating) {
             const avgRating = fn('AVG', col('Reviews.rating'));
             if (minRating && maxRating) {
-                havingCondition = sequelizeWhere(avgRating, {
-                    [Op.between]: [parseFloat(minRating), parseFloat(maxRating)]
-                });
+                havingCondition = sequelizeWhere(avgRating, { [Op.between]: [parseFloat(minRating), parseFloat(maxRating)] });
             } else if (minRating) {
                 havingCondition = sequelizeWhere(avgRating, { [Op.gte]: parseFloat(minRating) });
             } else {
@@ -607,14 +563,15 @@ exports.searchProducts = async (req, res) => {
                 },
                 {
                     model: Wishlist,
-                    attributes: ['id'],
+                    attributes: [],        // IMPORTANT: no attributes selected here, just to join
                     where: userId ? { userId } : undefined,
                     required: false
                 }
             ],
             attributes: {
                 include: [
-                    [fn('AVG', col('Reviews.rating')), 'avgRating']
+                    [fn('AVG', col('Reviews.rating')), 'avgRating'],
+                    [fn('MAX', col('Wishlists.id')), 'wishlistId']
                 ]
             },
             group: [
@@ -628,7 +585,16 @@ exports.searchProducts = async (req, res) => {
             order: [['createdAt', 'DESC']]
         });
 
-        return res.status(200).json(products);
+        // Add a flag for easier UI use
+        const productsWithFlag = products.map(product => {
+            const prod = product.toJSON();
+            prod.isInWishlist = !!prod.wishlistId;
+            delete prod.wishlistId;
+            return prod;
+        });
+
+        return res.status(200).json(productsWithFlag);
+
     } catch (error) {
         console.error('Error searching products:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
@@ -751,20 +717,16 @@ exports.addToWishlist = async (req, res) => {
 exports.getWishlist = async (req, res) => {
     try {
         const { userId } = req.params;
+        if (!userId) return res.status(400).json({ message: 'userId is required' });
 
         const wishlist = await Wishlist.findAll({
             where: { userId },
-            include: [{
-                model: Product,
-                attributes: ['id', 'name', 'price', 'imageUrl']
-            },
+            include: [
                 {
-                    model: Wishlist,
-                    attributes: ['id'],
-                    where: userId ? { userId } : undefined,
-                    required: false
+                    model: Product,
+                    attributes: ['id', 'name', 'price', 'imageUrl'],
                 }
-            ]
+            ],
         });
 
         return res.status(200).json(wishlist);

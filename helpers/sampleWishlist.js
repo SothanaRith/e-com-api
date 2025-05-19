@@ -80,31 +80,31 @@ const sampleWishlist = [
         productId: 20, // Product 20 (JBL Flip 5 Bluetooth Speaker)
     },
     {
-        userId: 1,  // User 1 (assuming User 1 is valid)
+        userId: 2,  // User 1 (assuming User 1 is valid)
         productId: 21,  // Product 1 (iPhone 13 Pro Max)
     },
     {
-        userId: 1,
+        userId: 2,
         productId: 23,  // Product 3 (Sony WH-1000XM4 Noise Cancelling Headphones)
     },
     {
-        userId: 1,
+        userId: 2,
         productId: 24,  // Product 2 (Samsung Galaxy S21 Ultra)
     },
     {
-        userId: 1,
+        userId: 2,
         productId: 25,  // Product 4 (Dell XPS 13 Laptop)
     },
     {
-        userId:1,
+        userId:2,
         productId: 26,  // Product 5 (Apple Watch Series 7)
     },
     {
-        userId: 1,
+        userId: 2,
         productId: 27,  // Product 7 (Bose QuietComfort 35 II)
     },
     {
-        userId: 1,
+        userId: 2,
         productId: 28,  // Product 6 (Samsung Galaxy Buds Pro)
     },
 ];
