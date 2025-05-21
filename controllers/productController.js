@@ -129,33 +129,31 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
     try {
-        const token = req.header('Authorization')?.split(' ')[1];
-        let userId = null;
+        const { userId } = req.params;
 
-        if (token) {
-            try {
-                const decoded = jwt.verify(decrypt(token), JWT_SECRET);
-                userId = decoded.id;
-            } catch (error) {
-                userId = null;
-            }
-        }
+        // Pagination input with defaults
+        const page = parseInt(req.query.page) || 1;
+        const size = parseInt(req.query.size) || 10;
+        const offset = (page - 1) * size;
+        const limit = size;
+
+        // Count total products (for pagination metadata)
+        const totalProducts = await Product.count();
 
         const products = await Product.findAll({
             include: [
-                {
-                    model: Category,
-                    attributes: ['id', 'name']
-                },
+                { model: Category, attributes: ['id', 'name'] },
                 ...(userId ? [{
                     model: Wishlist,
-                    as: 'Wishlists', // Use alias defined in associations
+                    as: 'Wishlists',
                     where: { userId },
-                    attributes: ['id'],
                     required: false,
+                    attributes: ['id']
                 }] : [])
             ],
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            offset,
+            limit,
         });
 
         const processedProducts = products.map(product => {
@@ -165,17 +163,28 @@ exports.getAllProducts = async (req, res) => {
             prod.categoryId = prod.Category?.id || null;
             delete prod.Category;
 
-            // Parse imageUrl if it's a string
+            // Parse imageUrl if needed
             if (typeof prod.imageUrl === 'string') {
-                try {
-                    prod.imageUrl = JSON.parse(prod.imageUrl);
-                } catch {}
+                try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
             }
+
+            // Add isInWishlist flag
+            prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
+            delete prod.Wishlists;
 
             return prod;
         });
 
-        return res.status(200).json(processedProducts);
+        return res.status(200).json({
+            data: processedProducts,
+            pagination: {
+                currentPage: page,
+                pageSize: size,
+                totalItems: totalProducts,
+                totalPages: Math.ceil(totalProducts / size),
+            },
+        });
+
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: 'Internal server error' });
@@ -266,65 +275,54 @@ exports.updateProduct = async (req, res) => {
 
 exports.getProductById = async (req, res) => {
     try {
-        const { id } = req.params;
-        console.log("Product ID:", id);
-        
+        const { id, userId } = req.params;
+
         const product = await Product.findByPk(id, {
             include: [
-                {
-                    model: Category,
-                    attributes: ['id', 'name'],
-                },
+                { model: Category, attributes: ['id', 'name'] },
                 {
                     model: Variant,
                     attributes: ['id', 'productId', 'sku', 'price', 'stock'],
-                    include: [{
-                        model: VariantAttribute,
-                        attributes: ['name', 'value']
-                    }]
+                    include: [{ model: VariantAttribute, attributes: ['name', 'value'] }]
                 },
                 {
                     model: Review,
                     attributes: ['id', 'rating', 'comment', 'userId', 'imageUrl'],
                     required: false,
-                    include: [{
-                        model: User,
-                        as: 'user',
-                        attributes: ['id', 'name', 'email']
-                    }]
+                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'] }]
                 },
                 {
                     model: Product,
                     as: 'RelatedProducts',
                     attributes: ['id', 'name', 'price'],
                     through: { attributes: [] }
-                }
-            ],
+                },
+                ...(userId ? [{
+                    model: Wishlist,
+                    as: 'Wishlists',
+                    where: { userId },
+                    attributes: ['id'],
+                    required: false
+                }] : [])
+            ]
         });
-        
-        if (!product) {
-            return res.status(404).json({ message: "Product not found" });
-        }
-        
-        // Convert to plain object
+
+        if (!product) return res.status(404).json({ message: "Product not found" });
+
         const prod = product.toJSON();
-        
-        // Flatten Category to categoryId
+
         prod.categoryId = prod.Category?.id || null;
         delete prod.Category;
-        
-        // Parse imageUrl if string
+
         if (typeof prod.imageUrl === 'string') {
-            try {
-                prod.imageUrl = JSON.parse(prod.imageUrl);
-            } catch (e) {
-                console.warn("Failed to parse imageUrl:", prod.imageUrl);
-                prod.imageUrl = [];
-            }
+            try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch { prod.imageUrl = []; }
         }
-        
+
+        prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
+        delete prod.Wishlists;
+
         return res.status(200).json(prod);
-        
+
     } catch (error) {
         console.error("Error fetching product:", error);
         res.status(500).json({ message: "Internal server error", error: error.message });
@@ -461,18 +459,28 @@ exports.deleteProduct = async (req, res) => {
     try {
         const { productId } = req.params;
 
-        // Check if product exists
         const product = await Product.findByPk(productId);
         if (!product) {
             return res.status(404).json({ message: "Product not found" });
         }
 
-        // Optional: Delete related data (variants, related products, etc.)
-        await Variant.destroy({ where: { productId } }); // if you have variants
-        await RelatedProduct.destroy({ where: { productId } }); // one side
-        await RelatedProduct.destroy({ where: { relatedProductId: productId } }); // other side
+        // Step 1: Get all variants for the product
+        const variants = await Variant.findAll({ where: { productId } });
+        const variantIds = variants.map(v => v.id);
 
-        // Delete the product
+        // Step 2: Delete variant attributes first
+        if (variantIds.length > 0) {
+            await VariantAttribute.destroy({ where: { variantId: variantIds } });
+        }
+
+        // Step 3: Delete variants
+        await Variant.destroy({ where: { productId } });
+
+        // Step 4: Delete related products links
+        await RelatedProduct.destroy({ where: { productId } });
+        await RelatedProduct.destroy({ where: { relatedProductId: productId } });
+
+        // Step 5: Delete the product
         await product.destroy();
 
         return res.status(200).json({ message: "Product deleted successfully" });
@@ -541,22 +549,21 @@ exports.getProductReviews = async (req, res) => {
 
 exports.searchProducts = async (req, res) => {
     try {
-        // Extract userId from token
-        const token = req.header('Authorization')?.split(' ')[1];
-        let userId = null;
+        const { userId } = req.params;
+        const {
+            query,
+            categoryId,
+            minPrice,
+            maxPrice,
+            variantSku,
+            page = 1,
+            size = 10,
+        } = req.query;
 
-        if (token) {
-            try {
-                const decoded = jwt.verify(decrypt(token), JWT_SECRET);
-                userId = decoded.id;
-            } catch (error) {
-                userId = null;
-            }
-        }
+        const limit = parseInt(size);
+        const offset = (parseInt(page) - 1) * limit;
 
-        // Build filters
-        const { query, categoryId, minPrice, maxPrice, variantSku } = req.query;
-
+        // Build product filter
         const productWhere = {};
         if (query) productWhere.name = { [Op.like]: `%${query}%` };
         if (categoryId) productWhere.categoryId = categoryId;
@@ -567,63 +574,56 @@ exports.searchProducts = async (req, res) => {
             };
         }
 
-        // Build include array
-        const includes = [
-            { model: Category, attributes: ['id', 'name'] },
-            {
-                model: Variant,
-                attributes: ['id', 'sku', 'price', 'stock'],
-                include: [{ model: VariantAttribute, attributes: ['name', 'value'] }],
-                ...(variantSku ? { where: { sku: variantSku } } : {}),
-            },
-            {
-                model: Review,
-                attributes: [],
-                required: false,
-            },
-        ];
+        // Fetch total count for pagination
+        const totalItems = await Product.count({ where: productWhere });
 
-        if (userId) {
-            // Use the correct alias 'Wishlists'
-            includes.push({
-                model: Wishlist,
-                as: 'Wishlists', // MATCHING alias defined in the association
-                attributes: [],
-                where: { userId },
-                required: false,
-            });
-        }
-
-        // Query products with aggregation of avgRating and wishlist count
+        // Fetch products
         const products = await Product.findAll({
             where: productWhere,
-            include: includes,
-            attributes: {
-                include: [
-                    [fn('AVG', col('Reviews.rating')), 'avgRating'],
-                    ...(userId ? [[fn('COUNT', col('Wishlists.id')), 'wishlistCount']] : []),
-                ],
-            },
-            group: [
-                'Product.id',
-                'Category.id',
-                'Variants.id',
-                'Variants->VariantAttributes.id',
-                'Reviews.id',
-                ...(userId ? ['Wishlists.id'] : []), // Group wishlistCount correctly
+            include: [
+                { model: Category, attributes: ['id', 'name'] },
+                ...(userId ? [{
+                    model: Wishlist,
+                    as: 'Wishlists',
+                    where: { userId },
+                    required: false,
+                    attributes: ['id']
+                }] : [])
             ],
             order: [['createdAt', 'DESC']],
+            limit,
+            offset,
         });
 
-        // Format response to include isInWishlist
-        const formatted = products.map((product) => {
-            const obj = product.toJSON();
-            obj.isInWishlist = userId ? obj.wishlistCount > 0 : false;
-            delete obj.wishlistCount;
-            return obj;
+        const formatted = products.map(product => {
+            const prod = product.toJSON();
+
+            // Flatten categoryId
+            prod.categoryId = prod.Category?.id || null;
+            delete prod.Category;
+
+            // Parse image URL
+            if (typeof prod.imageUrl === 'string') {
+                try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
+            }
+
+            // Wishlist flag
+            prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
+            delete prod.Wishlists;
+
+            return prod;
         });
 
-        return res.status(200).json(formatted);
+        return res.status(200).json({
+            data: formatted,
+            pagination: {
+                currentPage: parseInt(page),
+                pageSize: limit,
+                totalItems,
+                totalPages: Math.ceil(totalItems / limit),
+            },
+        });
+
     } catch (error) {
         console.error('Error in searchProducts:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
@@ -756,6 +756,7 @@ exports.getWishlist = async (req, res) => {
                     attributes: ['id', 'name', 'price', 'imageUrl'],
                 }
             ],
+
         });
 
         // Process the wishlist data as needed
