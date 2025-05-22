@@ -552,33 +552,47 @@ exports.searchProducts = async (req, res) => {
         const { userId } = req.params;
         const {
             query,
-            categoryId,
+            categoryIds,       // comma-separated list
             minPrice,
             maxPrice,
-            variantSku,
+            variantSku,        // comma-separated list of SKUs
+            availableOnly,     // boolean string 'true' or 'false'
+            sortBy = 'createdAt',
+            sortOrder = 'DESC',
             page = 1,
             size = 10,
         } = req.query;
 
-        const limit = parseInt(size);
-        const offset = (parseInt(page) - 1) * limit;
+        const limit = Math.min(parseInt(size, 10) || 10, 100); // max 100 per page
+        const offset = (parseInt(page, 10) - 1) * limit;
 
-        // Build product filter
+        // Build product filters
         const productWhere = {};
-        if (query) productWhere.name = { [Op.like]: `%${query}%` };
-        if (categoryId) productWhere.categoryId = categoryId;
-        if (minPrice || maxPrice) {
-            productWhere.price = {
-                ...(minPrice && { [Op.gte]: parseFloat(minPrice) }),
-                ...(maxPrice && { [Op.lte]: parseFloat(maxPrice) }),
-            };
+
+        if (query) {
+            productWhere[Op.or] = [
+                { name: { [Op.iLike]: `%${query}%` } },              // case-insensitive LIKE (Postgres)
+                { description: { [Op.iLike]: `%${query}%` } },       // full text on description too
+            ];
         }
 
-        // Fetch total count for pagination
-        const totalItems = await Product.count({ where: productWhere });
+        if (categoryIds) {
+            const ids = categoryIds.split(',').map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+            if (ids.length > 0) productWhere.categoryId = { [Op.in]: ids };
+        }
 
-        // Fetch products
-        const products = await Product.findAll({
+        if (minPrice || maxPrice) {
+            productWhere.price = {};
+            if (minPrice) productWhere.price[Op.gte] = parseFloat(minPrice);
+            if (maxPrice) productWhere.price[Op.lte] = parseFloat(maxPrice);
+        }
+
+        if (availableOnly === 'true') {
+            productWhere.stockQuantity = { [Op.gt]: 0 }; // assuming stockQuantity field exists
+        }
+
+        // Base query options
+        const queryOptions = {
             where: productWhere,
             include: [
                 { model: Category, attributes: ['id', 'name'] },
@@ -587,27 +601,50 @@ exports.searchProducts = async (req, res) => {
                     as: 'Wishlists',
                     where: { userId },
                     required: false,
-                    attributes: ['id']
+                    attributes: ['id'],
                 }] : [])
             ],
-            order: [['createdAt', 'DESC']],
+            order: [[sortBy, sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC']],
             limit,
             offset,
+        };
+
+        // Include variant SKU filtering if Variant model exists and variantSku provided
+        if (variantSku) {
+            const skus = variantSku.split(',').map(sku => sku.trim()).filter(Boolean);
+            if (skus.length) {
+                queryOptions.include.push({
+                    model: Variant,
+                    as: 'Variants',
+                    where: {
+                        sku: { [Op.in]: skus }
+                    },
+                    required: true,
+                    attributes: [],
+                });
+            }
+        }
+
+        // Get total count with same filters
+        const totalItems = await Product.count({
+            where: productWhere,
+            include: queryOptions.include.filter(i => !['Wishlists', 'Variants'].includes(i.as) ? true : i.required),
+            distinct: true,
+            col: 'Product.id',
         });
+
+        const products = await Product.findAll(queryOptions);
 
         const formatted = products.map(product => {
             const prod = product.toJSON();
 
-            // Flatten categoryId
             prod.categoryId = prod.Category?.id || null;
             delete prod.Category;
 
-            // Parse image URL
             if (typeof prod.imageUrl === 'string') {
                 try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
             }
 
-            // Wishlist flag
             prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
             delete prod.Wishlists;
 
@@ -617,7 +654,7 @@ exports.searchProducts = async (req, res) => {
         return res.status(200).json({
             data: formatted,
             pagination: {
-                currentPage: parseInt(page),
+                currentPage: parseInt(page, 10),
                 pageSize: limit,
                 totalItems,
                 totalPages: Math.ceil(totalItems / limit),
