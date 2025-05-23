@@ -14,6 +14,32 @@ const sampleProducts = [
             '/uploads/boseqc35ii.jpg',
             '/uploads/boseqc35ii.jpg',
         ],
+        review: {
+            rating: 5,
+            userId: 1,
+            comment: 'Amazing phone, best camera quality!',
+        },
+        variants: [
+            {
+                sku: 'IP13PM-128GB-SILVER',
+                price: 1099.99,
+                stock: 30,
+                attributes: [
+                    { name: 'Storage', value: '128GB' },
+                    { name: 'Color', value: 'Silver' },
+                ],
+            },
+            {
+                sku: 'IP13PM-256GB-GOLD',
+                price: 1199.99,
+                stock: 20,
+                attributes: [
+                    { name: 'Storage', value: '256GB' },
+                    { name: 'Color', value: 'Gold' },
+                ],
+            },
+        ],
+        relatedProductIds: [2, 5, 14],
     },
     {
         categoryId: 2,
@@ -31,6 +57,32 @@ const sampleProducts = [
             '/uploads/galaxys21ultra.jpg',
             '/uploads/galaxys21ultra.jpg',
         ],
+        review: {
+            rating: 4,
+            userId: 2,
+            comment: 'Great phone but battery life could be better.',
+        },
+        variants: [
+            {
+                sku: 'SGS21U-128GB-BLACK',
+                price: 1199.99,
+                stock: 40,
+                attributes: [
+                    { name: 'Storage', value: '128GB' },
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+            {
+                sku: 'SGS21U-256GB-SILVER',
+                price: 1299.99,
+                stock: 20,
+                attributes: [
+                    { name: 'Storage', value: '256GB' },
+                    { name: 'Color', value: 'Silver' },
+                ],
+            },
+        ],
+        relatedProductIds: [1, 6],
     },
     {
         categoryId: 3,
@@ -47,6 +99,30 @@ const sampleProducts = [
             '/uploads/sonyheadphones.jpg',
             '/uploads/sonyheadphones.jpg',
         ],
+        review: {
+            rating: 5,
+            userId: 3,
+            comment: 'Best headphones for travel and work.',
+        },
+        variants: [
+            {
+                sku: 'SONYWH1000XM4-BLK',
+                price: 349.99,
+                stock: 70,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+            {
+                sku: 'SONYWH1000XM4-SLV',
+                price: 369.99,
+                stock: 30,
+                attributes: [
+                    { name: 'Color', value: 'Silver' },
+                ],
+            },
+        ],
+        relatedProductIds: [7, 11],
     },
     {
         categoryId: 4,
@@ -60,6 +136,34 @@ const sampleProducts = [
             '/uploads/galaxybudspro.jpg',
             '/uploads/boseqc35ii.jpg',
         ],
+        review: {
+            rating: 4,
+            userId: 4,
+            comment: 'Lightweight and powerful for daily tasks.',
+        },
+        variants: [
+            {
+                sku: 'DELLXPS13-I7-16GB',
+                price: 1499.99,
+                stock: 20,
+                attributes: [
+                    { name: 'Processor', value: 'Intel Core i7' },
+                    { name: 'RAM', value: '16GB' },
+                    { name: 'Storage', value: '512GB SSD' },
+                ],
+            },
+            {
+                sku: 'DELLXPS13-I5-8GB',
+                price: 1299.99,
+                stock: 10,
+                attributes: [
+                    { name: 'Processor', value: 'Intel Core i5' },
+                    { name: 'RAM', value: '8GB' },
+                    { name: 'Storage', value: '256GB SSD' },
+                ],
+            },
+        ],
+        relatedProductIds: [12, 20],
     },
     {
         categoryId: 1,
@@ -74,6 +178,32 @@ const sampleProducts = [
             '/uploads/applewatch7.jpg',
             '/uploads/applewatch7.jpg',
         ],
+        review: {
+            rating: 4,
+            userId: 5,
+            comment: 'Love the health tracking features.',
+        },
+        variants: [
+            {
+                sku: 'AWATCH7-40MM-GREEN',
+                price: 399.99,
+                stock: 50,
+                attributes: [
+                    { name: 'Size', value: '40mm' },
+                    { name: 'Color', value: 'Green' },
+                ],
+            },
+            {
+                sku: 'AWATCH7-44MM-BLUE',
+                price: 429.99,
+                stock: 25,
+                attributes: [
+                    { name: 'Size', value: '44mm' },
+                    { name: 'Color', value: 'Blue' },
+                ],
+            },
+        ],
+        relatedProductIds: [1, 14],
     },
     {
         categoryId: 2,
@@ -88,6 +218,30 @@ const sampleProducts = [
             '/uploads/galaxybudspro.jpg',
             '/uploads/galaxybudspro.jpg',
         ],
+        review: {
+            rating: 4,
+            userId: 6,
+            comment: 'Excellent sound and comfortable for long use.',
+        },
+        variants: [
+            {
+                sku: 'GALAXYBUDSPRO-BLACK',
+                price: 199.99,
+                stock: 70,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+            {
+                sku: 'GALAXYBUDSPRO-SILVER',
+                price: 209.99,
+                stock: 50,
+                attributes: [
+                    { name: 'Color', value: 'Silver' },
+                ],
+            },
+        ],
+        relatedProductIds: [2, 3],
     },
     {
         categoryId: 3,
@@ -102,6 +256,22 @@ const sampleProducts = [
             '/uploads/boseqc35ii.jpg',
             '/uploads/boseqc35ii.jpg',
         ],
+        review: {
+            rating: 5,
+            userId: 7,
+            comment: 'Comfortable and noise cancellation is top notch.',
+        },
+        variants: [
+            {
+                sku: 'BOSEQC35II-BLK',
+                price: 299.99,
+                stock: 80,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+        ],
+        relatedProductIds: [3, 6],
     },
     {
         categoryId: 4,
@@ -116,6 +286,32 @@ const sampleProducts = [
             '/uploads/surfacelaptop4.jpg',
             '/uploads/surfacelaptop4.jpg',
         ],
+        review: {
+            rating: 4,
+            userId: 8,
+            comment: 'Great for productivity and portability.',
+        },
+        variants: [
+            {
+                sku: 'SURFACE-L4-I5-8GB',
+                price: 1199.99,
+                stock: 30,
+                attributes: [
+                    { name: 'Processor', value: 'Intel Core i5' },
+                    { name: 'RAM', value: '8GB' },
+                ],
+            },
+            {
+                sku: 'SURFACE-L4-I7-16GB',
+                price: 1399.99,
+                stock: 10,
+                attributes: [
+                    { name: 'Processor', value: 'Intel Core i7' },
+                    { name: 'RAM', value: '16GB' },
+                ],
+            },
+        ],
+        relatedProductIds: [4, 12],
     },
     {
         categoryId: 1,
@@ -130,6 +326,22 @@ const sampleProducts = [
             '/uploads/goprohero10.jpg',
             '/uploads/goprohero10.jpg',
         ],
+        review: {
+            rating: 5,
+            userId: 9,
+            comment: 'Perfect action camera with amazing video quality.',
+        },
+        variants: [
+            {
+                sku: 'GOPROHERO10-BLACK',
+                price: 499.99,
+                stock: 100,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+        ],
+        relatedProductIds: [1, 3],
     },
     {
         categoryId: 2,
@@ -144,6 +356,22 @@ const sampleProducts = [
             '/uploads/fitbitcharge5.jpg',
             '/uploads/fitbitcharge5.jpg',
         ],
+        review: {
+            rating: 4,
+            userId: 10,
+            comment: 'Accurate tracking and easy to use.',
+        },
+        variants: [
+            {
+                sku: 'FITBITC5-BLACK',
+                price: 179.99,
+                stock: 150,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+        ],
+        relatedProductIds: [5, 14],
     },
     {
         categoryId: 3,
@@ -158,6 +386,22 @@ const sampleProducts = [
             '/uploads/jblcharge5.jpg',
             '/uploads/jblcharge5.jpg',
         ],
+        review: {
+            rating: 5,
+            userId: 11,
+            comment: 'Loud, clear, and durable speaker.',
+        },
+        variants: [
+            {
+                sku: 'JBLCHARGE5-BLACK',
+                price: 179.99,
+                stock: 200,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+        ],
+        relatedProductIds: [3, 7],
     },
     {
         categoryId: 4,
@@ -171,6 +415,23 @@ const sampleProducts = [
             '/uploads/lenovothinkpadx1.jpg',
             '/uploads/lenovothinkpadx1.jpg',
         ],
+        review: {
+            rating: 5,
+            userId: 12,
+            comment: 'Reliable and fast laptop for professionals.',
+        },
+        variants: [
+            {
+                sku: 'LENOVO-X1-I7-16GB',
+                price: 1899.99,
+                stock: 25,
+                attributes: [
+                    { name: 'Processor', value: 'Intel Core i7' },
+                    { name: 'RAM', value: '16GB' },
+                ],
+            },
+        ],
+        relatedProductIds: [4, 8],
     },
     {
         categoryId: 1,
@@ -185,6 +446,32 @@ const sampleProducts = [
             '/uploads/ipadpro12.jpg',
             '/uploads/ipadpro12.jpg',
         ],
+        review: {
+            rating: 5,
+            userId: 13,
+            comment: 'Powerful tablet with stunning display.',
+        },
+        variants: [
+            {
+                sku: 'IPADPRO12-128GB',
+                price: 1099.99,
+                stock: 40,
+                attributes: [
+                    { name: 'Storage', value: '128GB' },
+                    { name: 'Color', value: 'Space Gray' },
+                ],
+            },
+            {
+                sku: 'IPADPRO12-256GB',
+                price: 1299.99,
+                stock: 20,
+                attributes: [
+                    { name: 'Storage', value: '256GB' },
+                    { name: 'Color', value: 'Silver' },
+                ],
+            },
+        ],
+        relatedProductIds: [1, 5],
     },
     {
         categoryId: 2,
@@ -193,6 +480,22 @@ const sampleProducts = [
         price: 249.99,
         totalStock: 150,
         imageUrl: ['/uploads/airpodspro2.jpg'],
+        review: {
+            rating: 5,
+            userId: 14,
+            comment: 'Fantastic sound and noise cancellation.',
+        },
+        variants: [
+            {
+                sku: 'AIRPODSPRO2',
+                price: 249.99,
+                stock: 150,
+                attributes: [
+                    { name: 'Generation', value: '2nd' },
+                ],
+            },
+        ],
+        relatedProductIds: [5, 6],
     },
     {
         categoryId: 3,
@@ -201,6 +504,22 @@ const sampleProducts = [
         price: 399.99,
         totalStock: 80,
         imageUrl: ['/uploads/harmankardononyx6.jpg'],
+        review: {
+            rating: 4,
+            userId: 15,
+            comment: 'Great bass and sleek design.',
+        },
+        variants: [
+            {
+                sku: 'HARMANONYX6-BLK',
+                price: 399.99,
+                stock: 80,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+        ],
+        relatedProductIds: [7, 11],
     },
     {
         categoryId: 4,
@@ -209,6 +528,23 @@ const sampleProducts = [
         price: 1599.99,
         totalStock: 40,
         imageUrl: ['/uploads/hpspectrex360.jpg'],
+        review: {
+            rating: 4,
+            userId: 16,
+            comment: 'Flexible and powerful convertible laptop.',
+        },
+        variants: [
+            {
+                sku: 'HPSPECTREX360-I7',
+                price: 1599.99,
+                stock: 40,
+                attributes: [
+                    { name: 'Processor', value: 'Intel Core i7' },
+                    { name: 'RAM', value: '16GB' },
+                ],
+            },
+        ],
+        relatedProductIds: [4, 20],
     },
     {
         categoryId: 1,
@@ -217,6 +553,23 @@ const sampleProducts = [
         price: 999.99,
         totalStock: 50,
         imageUrl: ['/uploads/macbookairm1.jpg'],
+        review: {
+            rating: 5,
+            userId: 17,
+            comment: 'Light, fast, and great battery life.',
+        },
+        variants: [
+            {
+                sku: 'MACBOOKAIR-M1-8GB',
+                price: 999.99,
+                stock: 50,
+                attributes: [
+                    { name: 'RAM', value: '8GB' },
+                    { name: 'Processor', value: 'Apple M1' },
+                ],
+            },
+        ],
+        relatedProductIds: [1, 14],
     },
     {
         categoryId: 2,
@@ -225,6 +578,30 @@ const sampleProducts = [
         price: 499.99,
         totalStock: 200,
         imageUrl: ['/uploads/ps5.jpg'],
+        review: {
+            rating: 5,
+            userId: 18,
+            comment: 'Next-gen gaming experience is fantastic!',
+        },
+        variants: [
+            {
+                sku: 'PS5-DIGITAL',
+                price: 399.99,
+                stock: 80,
+                attributes: [
+                    { name: 'Edition', value: 'Digital' },
+                ],
+            },
+            {
+                sku: 'PS5-DISC',
+                price: 499.99,
+                stock: 120,
+                attributes: [
+                    { name: 'Edition', value: 'Disc' },
+                ],
+            },
+        ],
+        relatedProductIds: [19, 22],
     },
     {
         categoryId: 3,
@@ -233,6 +610,22 @@ const sampleProducts = [
         price: 69.99,
         totalStock: 300,
         imageUrl: ['/uploads/razerdeathadderv2.jpg'],
+        review: {
+            rating: 4,
+            userId: 19,
+            comment: 'Comfortable and responsive gaming mouse.',
+        },
+        variants: [
+            {
+                sku: 'RAZERDA-V2-BLK',
+                price: 69.99,
+                stock: 300,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+        ],
+        relatedProductIds: [22, 24],
     },
     {
         categoryId: 4,
@@ -241,6 +634,23 @@ const sampleProducts = [
         price: 89.99,
         totalStock: 150,
         imageUrl: ['/uploads/corsairvengeance.jpg'],
+        review: {
+            rating: 5,
+            userId: 20,
+            comment: 'Reliable RAM with great overclocking potential.',
+        },
+        variants: [
+            {
+                sku: 'CORSAIR16GB-DDR4',
+                price: 89.99,
+                stock: 150,
+                attributes: [
+                    { name: 'Capacity', value: '16GB' },
+                    { name: 'Type', value: 'DDR4' },
+                ],
+            },
+        ],
+        relatedProductIds: [24, 28],
     },
     {
         categoryId: 1,
@@ -249,6 +659,22 @@ const sampleProducts = [
         price: 1999.99,
         totalStock: 30,
         imageUrl: ['/uploads/sonya7iii.jpg'],
+        review: {
+            rating: 5,
+            userId: 21,
+            comment: 'Excellent image quality and autofocus speed.',
+        },
+        variants: [
+            {
+                sku: 'SONYA7III-BODY',
+                price: 1999.99,
+                stock: 30,
+                attributes: [
+                    { name: 'Type', value: 'Body Only' },
+                ],
+            },
+        ],
+        relatedProductIds: [23, 25],
     },
     {
         categoryId: 2,
@@ -257,6 +683,22 @@ const sampleProducts = [
         price: 349.99,
         totalStock: 80,
         imageUrl: ['/uploads/nintendoswitcholed.jpg'],
+        review: {
+            rating: 4,
+            userId: 22,
+            comment: 'Great display and solid gaming experience.',
+        },
+        variants: [
+            {
+                sku: 'NSWITCH-OLED',
+                price: 349.99,
+                stock: 80,
+                attributes: [
+                    { name: 'Model', value: 'OLED' },
+                ],
+            },
+        ],
+        relatedProductIds: [19, 26],
     },
     {
         categoryId: 3,
@@ -265,6 +707,22 @@ const sampleProducts = [
         price: 199.99,
         totalStock: 100,
         imageUrl: ['/uploads/echo-studio.jpg'],
+        review: {
+            rating: 4,
+            userId: 23,
+            comment: 'Impressive sound and smart features.',
+        },
+        variants: [
+            {
+                sku: 'ECHOSTUDIO-BLK',
+                price: 199.99,
+                stock: 100,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+        ],
+        relatedProductIds: [11, 15],
     },
     {
         categoryId: 4,
@@ -273,6 +731,22 @@ const sampleProducts = [
         price: 99.99,
         totalStock: 120,
         imageUrl: ['/uploads/logitechmxmaster3.jpg'],
+        review: {
+            rating: 5,
+            userId: 24,
+            comment: 'Ergonomic and highly customizable mouse.',
+        },
+        variants: [
+            {
+                sku: 'LOGIMXMASTER3-BLK',
+                price: 99.99,
+                stock: 120,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+        ],
+        relatedProductIds: [24, 27],
     },
     {
         categoryId: 1,
@@ -281,6 +755,22 @@ const sampleProducts = [
         price: 1299.99,
         totalStock: 40,
         imageUrl: ['/uploads/canon90d.jpg'],
+        review: {
+            rating: 5,
+            userId: 25,
+            comment: 'Fantastic DSLR with versatile features.',
+        },
+        variants: [
+            {
+                sku: 'CANON90D-BODY',
+                price: 1299.99,
+                stock: 40,
+                attributes: [
+                    { name: 'Type', value: 'Body Only' },
+                ],
+            },
+        ],
+        relatedProductIds: [23, 29],
     },
     {
         categoryId: 2,
@@ -289,6 +779,23 @@ const sampleProducts = [
         price: 899.99,
         totalStock: 60,
         imageUrl: ['/uploads/googlepixel6pro.jpg'],
+        review: {
+            rating: 4,
+            userId: 26,
+            comment: 'Clean Android experience with excellent camera.',
+        },
+        variants: [
+            {
+                sku: 'PIXEL6PRO-128GB',
+                price: 899.99,
+                stock: 60,
+                attributes: [
+                    { name: 'Storage', value: '128GB' },
+                    { name: 'Color', value: 'Stormy Black' },
+                ],
+            },
+        ],
+        relatedProductIds: [2, 19],
     },
     {
         categoryId: 3,
@@ -297,6 +804,22 @@ const sampleProducts = [
         price: 299.99,
         totalStock: 50,
         imageUrl: ['/uploads/bosesoundlinkrevolve.jpg'],
+        review: {
+            rating: 5,
+            userId: 27,
+            comment: 'Great sound in all directions and portable.',
+        },
+        variants: [
+            {
+                sku: 'BOSESLREVOLVE-BLK',
+                price: 299.99,
+                stock: 50,
+                attributes: [
+                    { name: 'Color', value: 'Black' },
+                ],
+            },
+        ],
+        relatedProductIds: [7, 11],
     },
     {
         categoryId: 4,
@@ -305,7 +828,24 @@ const sampleProducts = [
         price: 699.99,
         totalStock: 80,
         imageUrl: ['/uploads/macminiM1.jpg'],
-    }
+        review: {
+            rating: 4,
+            userId: 28,
+            comment: 'Compact and fast desktop for professionals.',
+        },
+        variants: [
+            {
+                sku: 'MACMINI-M1-8GB',
+                price: 699.99,
+                stock: 80,
+                attributes: [
+                    { name: 'RAM', value: '8GB' },
+                    { name: 'Processor', value: 'Apple M1' },
+                ],
+            },
+        ],
+        relatedProductIds: [1, 14],
+    },
 ];
 
 module.exports = sampleProducts;
