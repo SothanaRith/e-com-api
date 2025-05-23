@@ -556,6 +556,7 @@ exports.searchProducts = async (req, res) => {
             minPrice,
             maxPrice,
             variantSku,
+            minRating,   // NEW: filter by minRating
             page = 1,
             size = 10,
         } = req.query;
@@ -563,66 +564,152 @@ exports.searchProducts = async (req, res) => {
         const limit = parseInt(size, 10);
         const offset = (parseInt(page, 10) - 1) * limit;
 
-        // Build product filter
         const productWhere = {};
-        if (query) productWhere.name = { [Op.like]: `%${query}%` };
-        if (categoryId) productWhere.categoryId = categoryId;
-        if (minPrice || maxPrice) {
-            productWhere.price = {
-                ...(minPrice && { [Op.gte]: parseFloat(minPrice) }),
-                ...(maxPrice && { [Op.lte]: parseFloat(maxPrice) }),
-            };
+
+        if (query && query.trim()) {
+            productWhere.name = { [Op.like]: `%${query.trim()}%` };
         }
 
-        // Fix: Use count with same include and distinct + col: 'id' to avoid unknown column error
-        const totalItems = await Product.count({
-            where: productWhere,
-            include: [
-                ...(userId ? [{
-                    model: Wishlist,
-                    as: 'Wishlists',
-                    where: { userId },
-                    required: false,
-                    attributes: [],
-                }] : [])
-            ],
-            distinct: true,
-            col: 'id',
-        });
+        if (categoryId) {
+            const categoryIds = categoryId.split(',').map(id => parseInt(id.trim(), 10));
+            productWhere.categoryId = { [Op.in]: categoryIds };
+        }
 
-        // Fetch products
-        const products = await Product.findAll({
-            where: productWhere,
-            include: [
-                { model: Category, attributes: ['id', 'name'] },
-                ...(userId ? [{
-                    model: Wishlist,
-                    as: 'Wishlists',
-                    where: { userId },
-                    required: false,
-                    attributes: ['id']
-                }] : [])
-            ],
-            order: [['createdAt', 'DESC']],
-            limit,
-            offset,
-        });
+        if (minPrice !== undefined || maxPrice !== undefined) {
+            productWhere.price = {};
+            if (minPrice !== undefined && minPrice !== '') {
+                productWhere.price[Op.gte] = parseFloat(minPrice);
+            }
+            if (maxPrice !== undefined && maxPrice !== '') {
+                productWhere.price[Op.lte] = parseFloat(maxPrice);
+            }
+        }
+
+        // Include models array for queries
+        const includeModels = [
+            { model: Category, attributes: ['id', 'name'] },
+            ...(userId ? [{
+                model: Wishlist,
+                as: 'Wishlists',
+                where: { userId },
+                required: false,
+                attributes: ['id']
+            }] : [])
+        ];
+
+        // If filtering by rating, add Review model and grouping
+        if (minRating !== undefined && minRating !== '') {
+            // Add Review model to compute average rating
+            includeModels.push({
+                model: Review,
+                attributes: [],  // We don't need review details in output, just aggregate
+                required: true
+            });
+        }
+
+        // For count, if filtering by rating, use subquery with grouping and HAVING
+        let totalItems = 0;
+        if (minRating !== undefined && minRating !== '') {
+            // Count products with average rating >= minRating
+            const minRatingFloat = parseFloat(minRating);
+
+            const productsWithAvgRating = await Product.findAll({
+                where: productWhere,
+                include: [
+                    {
+                        model: Review,
+                        attributes: []
+                    }
+                ],
+                attributes: [
+                    'id',
+                    [fn('AVG', col('Reviews.rating')), 'avgRating']
+                ],
+                group: ['Product.id'],
+                having: sequelizeWhere(fn('AVG', col('Reviews.rating')), { [Op.gte]: minRatingFloat }),
+            });
+
+            totalItems = productsWithAvgRating.length;
+
+        } else {
+            totalItems = await Product.count({
+                where: productWhere,
+                include: [
+                    ...(userId ? [{
+                        model: Wishlist,
+                        as: 'Wishlists',
+                        where: { userId },
+                        required: false,
+                        attributes: [],
+                    }] : [])
+                ],
+                distinct: true,
+                col: 'id',
+            });
+        }
+
+        // Query products with pagination, rating filter if present
+        let products;
+        if (minRating !== undefined && minRating !== '') {
+            const minRatingFloat = parseFloat(minRating);
+
+            products = await Product.findAll({
+                where: productWhere,
+                include: [
+                    { model: Category, attributes: ['id', 'name'] },
+                    ...(userId ? [{
+                        model: Wishlist,
+                        as: 'Wishlists',
+                        where: { userId },
+                        required: false,
+                        attributes: ['id']
+                    }] : []),
+                    {
+                        model: Review,
+                        attributes: [],
+                        required: true,
+                    }
+                ],
+                attributes: {
+                    include: [
+                        [fn('AVG', col('Reviews.rating')), 'avgRating']
+                    ]
+                },
+                group: ['Product.id', 'Category.id', ...(userId ? ['Wishlists.id'] : [])],
+                having: sequelizeWhere(fn('AVG', col('Reviews.rating')), { [Op.gte]: minRatingFloat }),
+                order: [['createdAt', 'DESC']],
+                limit,
+                offset,
+                subQuery: false // Important when grouping and paginating
+            });
+
+        } else {
+            products = await Product.findAll({
+                where: productWhere,
+                include: includeModels,
+                order: [['createdAt', 'DESC']],
+                limit,
+                offset,
+            });
+        }
 
         const formatted = products.map(product => {
             const prod = product.toJSON();
 
-            // Flatten categoryId
             prod.categoryId = prod.Category?.id || null;
             delete prod.Category;
 
-            // Parse image URL
             if (typeof prod.imageUrl === 'string') {
                 try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
             }
 
-            // Wishlist flag
             prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
             delete prod.Wishlists;
+
+            // Add avgRating if present
+            if (prod.avgRating !== undefined) {
+                prod.avgRating = parseFloat(prod.avgRating).toFixed(2);
+            }
 
             return prod;
         });
