@@ -149,6 +149,12 @@ exports.getAllProducts = async (req, res) => {
                     where: { userId },
                     required: false,
                     attributes: ['id']
+                }] : []),
+                ...(userId ? [{
+                    model: Cart,
+                    where: { userId },
+                    required: false,
+                    attributes: ['quantity']
                 }] : [])
             ],
             order: [['createdAt', 'DESC']],
@@ -168,9 +174,21 @@ exports.getAllProducts = async (req, res) => {
                 try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
             }
 
-            // Add isInWishlist flag
+            // Wishlist flag
             prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
             delete prod.Wishlists;
+
+            // Cart flags
+            if (userId) {
+                if (prod.Carts && prod.Carts.length > 0) {
+                    prod.isInCart = true;
+                    prod.cartQuantity = prod.Carts[0].quantity;
+                } else {
+                    prod.isInCart = false;
+                    prod.cartQuantity = 0;
+                }
+                delete prod.Carts;
+            }
 
             return prod;
         });
@@ -187,7 +205,7 @@ exports.getAllProducts = async (req, res) => {
 
     } catch (error) {
         console.error(error);
-        return res.status(500).json({ message: 'Internal server error' });
+        return res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 };
 
@@ -303,6 +321,12 @@ exports.getProductById = async (req, res) => {
                     where: { userId },
                     attributes: ['id'],
                     required: false
+                }] : []),
+                ...(userId ? [{
+                    model: Cart,
+                    where: { userId },
+                    attributes: ['quantity'],
+                    required: false
                 }] : [])
             ]
         });
@@ -320,6 +344,18 @@ exports.getProductById = async (req, res) => {
 
         prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
         delete prod.Wishlists;
+
+        // Add isInCart flag and quantity
+        if (userId) {
+            if (prod.Carts && prod.Carts.length > 0) {
+                prod.isInCart = true;
+                prod.cartQuantity = prod.Carts[0].quantity;
+            } else {
+                prod.isInCart = false;
+                prod.cartQuantity = 0;
+            }
+            delete prod.Carts;
+        }
 
         return res.status(200).json(prod);
 
@@ -546,7 +582,6 @@ exports.getProductReviews = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
-
 exports.searchProducts = async (req, res) => {
     try {
         const { userId } = req.params;
@@ -556,7 +591,7 @@ exports.searchProducts = async (req, res) => {
             minPrice,
             maxPrice,
             variantSku,
-            minRating,   // NEW: filter by minRating
+            minRating,
             page = 1,
             size = 10,
         } = req.query;
@@ -585,7 +620,7 @@ exports.searchProducts = async (req, res) => {
             }
         }
 
-        // Include models array for queries
+        // Base includes for all queries, includes Cart if userId provided
         const includeModels = [
             { model: Category, attributes: ['id', 'name'] },
             ...(userId ? [{
@@ -594,25 +629,22 @@ exports.searchProducts = async (req, res) => {
                 where: { userId },
                 required: false,
                 attributes: ['id']
+            }] : []),
+            ...(userId ? [{
+                model: Cart,
+                where: { userId },
+                required: false,
+                attributes: ['quantity']
             }] : [])
         ];
 
-        // If filtering by rating, add Review model and grouping
-        if (minRating !== undefined && minRating !== '') {
-            // Add Review model to compute average rating
-            includeModels.push({
-                model: Review,
-                attributes: [],  // We don't need review details in output, just aggregate
-                required: true
-            });
-        }
-
-        // For count, if filtering by rating, use subquery with grouping and HAVING
         let totalItems = 0;
+        let products;
+
         if (minRating !== undefined && minRating !== '') {
-            // Count products with average rating >= minRating
             const minRatingFloat = parseFloat(minRating);
 
+            // Count total items with avg rating filter
             const productsWithAvgRating = await Product.findAll({
                 where: productWhere,
                 include: [
@@ -631,7 +663,45 @@ exports.searchProducts = async (req, res) => {
 
             totalItems = productsWithAvgRating.length;
 
+            // Query products with avg rating filter plus Wishlist and Cart includes if userId
+            products = await Product.findAll({
+                where: productWhere,
+                include: [
+                    { model: Category, attributes: ['id', 'name'] },
+                    ...(userId ? [{
+                        model: Wishlist,
+                        as: 'Wishlists',
+                        where: { userId },
+                        required: false,
+                        attributes: ['id']
+                    }] : []),
+                    ...(userId ? [{
+                        model: Cart,
+                        where: { userId },
+                        required: false,
+                        attributes: ['quantity']
+                    }] : []),
+                    {
+                        model: Review,
+                        attributes: [],
+                        required: true,
+                    }
+                ],
+                attributes: {
+                    include: [
+                        [fn('AVG', col('Reviews.rating')), 'avgRating']
+                    ]
+                },
+                group: ['Product.id', 'Category.id', ...(userId ? ['Wishlists.id', 'Carts.id'] : [])],
+                having: sequelizeWhere(fn('AVG', col('Reviews.rating')), { [Op.gte]: minRatingFloat }),
+                order: [['createdAt', 'DESC']],
+                limit,
+                offset,
+                subQuery: false // Important for pagination with grouping
+            });
+
         } else {
+            // Without rating filter, count total items normally
             totalItems = await Product.count({
                 where: productWhere,
                 include: [
@@ -646,44 +716,8 @@ exports.searchProducts = async (req, res) => {
                 distinct: true,
                 col: 'id',
             });
-        }
 
-        // Query products with pagination, rating filter if present
-        let products;
-        if (minRating !== undefined && minRating !== '') {
-            const minRatingFloat = parseFloat(minRating);
-
-            products = await Product.findAll({
-                where: productWhere,
-                include: [
-                    { model: Category, attributes: ['id', 'name'] },
-                    ...(userId ? [{
-                        model: Wishlist,
-                        as: 'Wishlists',
-                        where: { userId },
-                        required: false,
-                        attributes: ['id']
-                    }] : []),
-                    {
-                        model: Review,
-                        attributes: [],
-                        required: true,
-                    }
-                ],
-                attributes: {
-                    include: [
-                        [fn('AVG', col('Reviews.rating')), 'avgRating']
-                    ]
-                },
-                group: ['Product.id', 'Category.id', ...(userId ? ['Wishlists.id'] : [])],
-                having: sequelizeWhere(fn('AVG', col('Reviews.rating')), { [Op.gte]: minRatingFloat }),
-                order: [['createdAt', 'DESC']],
-                limit,
-                offset,
-                subQuery: false // Important when grouping and paginating
-            });
-
-        } else {
+            // Query products without rating filter
             products = await Product.findAll({
                 where: productWhere,
                 include: includeModels,
@@ -706,7 +740,17 @@ exports.searchProducts = async (req, res) => {
             prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
             delete prod.Wishlists;
 
-            // Add avgRating if present
+            if (userId) {
+                if (prod.Carts && prod.Carts.length > 0) {
+                    prod.isInCart = true;
+                    prod.cartQuantity = prod.Carts[0].quantity;
+                } else {
+                    prod.isInCart = false;
+                    prod.cartQuantity = 0;
+                }
+                delete prod.Carts;
+            }
+
             if (prod.avgRating !== undefined) {
                 prod.avgRating = parseFloat(prod.avgRating).toFixed(2);
             }
@@ -784,13 +828,34 @@ exports.deleteVariant = async (req, res) => {
     }
 };
 
-exports.addToCart = async (req, res) => {
+exports.addOrUpdateCart = async (req, res) => {
     try {
-        const { userId, productId, quantity, priceAtPurchase } = req.body;
+        const { userId, productId, quantity } = req.body;
 
-        const cartItem = await Cart.create({ userId, productId, quantity, priceAtPurchase });
+        if (!userId || !productId || !quantity || quantity <= 0) {
+            return res.status(400).json({ message: 'Invalid input' });
+        }
 
-        return res.status(201).json({ message: 'Added to cart', cartItem });
+        const product = await Product.findByPk(productId);
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+
+        let cartItem = await Cart.findOne({ where: { userId, productId } });
+
+        if (cartItem) {
+            cartItem.quantity = quantity;
+            await cartItem.save();
+            return res.status(200).json({ message: 'Cart updated', cartItem });
+        } else {
+            cartItem = await Cart.create({
+                userId,
+                productId,
+                quantity,
+                priceAtPurchase: product.price
+            });
+            return res.status(201).json({ message: 'Added to cart', cartItem });
+        }
     } catch (error) {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
@@ -799,7 +864,17 @@ exports.addToCart = async (req, res) => {
 exports.getCart = async (req, res) => {
     try {
         const { userId } = req.params;
-        const cart = await Cart.findAll({ where: { userId } });
+
+        const cart = await Cart.findAll({
+            where: { userId },
+            include: [
+                {
+                    model: Product,
+                    attributes: ['id', 'name', 'price', 'imageUrl']
+                }
+            ]
+        });
+
         return res.status(200).json(cart);
     } catch (error) {
         return res.status(500).json({ message: 'Server error', error: error.message });
@@ -809,8 +884,15 @@ exports.getCart = async (req, res) => {
 exports.removeFromCart = async (req, res) => {
     try {
         const { userId, productId } = req.params;
-        await Cart.destroy({ where: { userId, productId } });
+
+        const cartItem = await Cart.findOne({ where: { userId, productId } });
+        if (!cartItem) {
+            return res.status(404).json({ message: 'Cart item not found' });
+        }
+
+        await cartItem.destroy();
         return res.status(200).json({ message: 'Removed from cart' });
+
     } catch (error) {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
@@ -831,17 +913,41 @@ exports.getOrdersByUser = async (req, res) => {
 
 exports.addToWishlist = async (req, res) => {
     try {
-        const { userId, productId } = req.body;
-
-        const exists = await Wishlist.findOne({ where: { userId, productId } });
-        if (exists) return res.status(409).json({ message: 'Product already in wishlist' });
-
-        const wishlist = await Wishlist.create({ userId, productId });
-        return res.status(201).json({ message: 'Added to wishlist', wishlist });
+      const { userId, productId, quantity } = req.body;
+  
+      if (!userId || !productId || !quantity || quantity <= 0) {
+        return res.status(400).json({ message: 'Invalid input' });
+      }
+  
+      // Check if product exists
+      const product = await Product.findByPk(productId);
+      if (!product) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+  
+      // Find existing cart item
+      let cartItem = await Cart.findOne({ where: { userId, productId } });
+  
+      if (cartItem) {
+        // Update quantity (replace or add - here we replace with new quantity)
+        cartItem.quantity = quantity;
+        await cartItem.save();
+        return res.status(200).json({ message: 'Cart updated', cartItem });
+      } else {
+        // Create new cart item
+        cartItem = await Cart.create({
+          userId,
+          productId,
+          quantity,
+          priceAtPurchase: product.price
+        });
+        return res.status(201).json({ message: 'Added to cart', cartItem });
+      }
     } catch (error) {
-        return res.status(500).json({ message: 'Server error', error: error.message });
+      console.error('Error updating cart:', error);
+      return res.status(500).json({ message: 'Server error', error: error.message });
     }
-};
+  };
 // Get wishlist for user
 exports.getWishlist = async (req, res) => {
     try {

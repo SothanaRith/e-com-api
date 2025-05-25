@@ -1,4 +1,4 @@
-const { Category, Product, Wishlist } = require("../models");
+const { Category, Product, Wishlist, Cart } = require("../models");
 const { successResponse, failResponse } = require("../utils/baseResponse");
 
 exports.loadHome = async (req, res) => {
@@ -15,13 +15,21 @@ exports.loadHome = async (req, res) => {
       limit,
       offset,
       order: [["createdAt", "DESC"]],
-      include: userId ? [{
-        model: Wishlist,
-        as: 'Wishlists',
-        attributes: ['id'],
-        where: { userId },
-        required: false
-      }] : []
+      include: [
+        ...(userId ? [{
+          model: Wishlist,
+          as: 'Wishlists',
+          attributes: ['id'],
+          where: { userId },
+          required: false
+        }] : []),
+        ...(userId ? [{
+          model: Cart,
+          where: { userId },
+          attributes: ['quantity'],
+          required: false
+        }] : [])
+      ]
     });
 
     const processedProducts = products.map(product => {
@@ -35,6 +43,18 @@ exports.loadHome = async (req, res) => {
       // Set isInWishlist
       prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
       delete prod.Wishlists;
+
+      // Set cart info
+      if (userId) {
+        if (prod.Carts && prod.Carts.length > 0) {
+          prod.isInCart = true;
+          prod.cartQuantity = prod.Carts[0].quantity;
+        } else {
+          prod.isInCart = false;
+          prod.cartQuantity = 0;
+        }
+        delete prod.Carts;
+      }
 
       return prod;
     });

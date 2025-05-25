@@ -28,7 +28,7 @@ router.post("/variant/:variantId/update", productController.updateVariant);
 router.post("/variant/:variantId/delete", productController.deleteVariant);
 
 // Cart operations
-router.post("/cart/add", productController.addToCart);
+router.post("/cart/add", productController.addOrUpdateCart);
 router.get("/cart/:userId", productController.getCart);
 router.post("/cart/:userId/:productId/delete", productController.removeFromCart);
 
