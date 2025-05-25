@@ -11,8 +11,7 @@ const Variant = require('./VariantModel');
 const VariantAttribute = require('./VariantAttributeModel');
 const Cart = require('./Cart');
 const Shop = require('./Shop');
-
-// Define associations
+const Transaction = require('./Transaction');
 
 // Chat associations
 User.hasMany(Chat, { foreignKey: 'sender_id', as: 'SentMessages' });
@@ -20,18 +19,18 @@ User.hasMany(Chat, { foreignKey: 'receiver_id', as: 'ReceivedMessages' });
 Chat.belongsTo(User, { foreignKey: 'sender_id', as: 'Sender' });
 Chat.belongsTo(User, { foreignKey: 'receiver_id', as: 'Receiver' });
 
-// Review associations (corrected foreignKey to 'userId')
+// Review associations
 Review.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 User.hasMany(Review, { foreignKey: 'userId' });
 
-// Wishlist associations (added 'as' alias for consistency)
+// Wishlist associations
 User.hasMany(Wishlist, { foreignKey: 'userId', as: 'Wishlists', onDelete: 'CASCADE' });
 Wishlist.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 Product.hasMany(Wishlist, { foreignKey: 'productId', as: 'Wishlists', onDelete: 'CASCADE' });
 Wishlist.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
 
-// Shop associations (added 'as' for consistency)
+// Shop associations
 User.hasMany(Shop, { foreignKey: 'vendorId', as: 'shops' });
 Shop.belongsTo(User, { foreignKey: 'vendorId', as: 'vendor' });
 
@@ -43,32 +42,41 @@ Product.belongsTo(Category, { foreignKey: 'categoryId' });
 Product.hasMany(Review, { foreignKey: 'productId', onDelete: 'CASCADE' });
 Review.belongsTo(Product, { foreignKey: 'productId' });
 
-// Product - OrderProduct associations
-Product.hasMany(OrderProduct, { foreignKey: 'productId' });
-OrderProduct.belongsTo(Product, { foreignKey: 'productId' });
-
-// Variant and Product associations
+// Product - Variant associations
 Product.hasMany(Variant, { foreignKey: 'productId', onDelete: 'CASCADE' });
 Variant.belongsTo(Product, { foreignKey: 'productId', onDelete: 'CASCADE' });
 
-// VariantAttribute associations with Variant
+// Variant - VariantAttribute associations
 Variant.hasMany(VariantAttribute, { foreignKey: 'variantId', onDelete: 'CASCADE' });
 VariantAttribute.belongsTo(Variant, { foreignKey: 'variantId', onDelete: 'CASCADE' });
 
-// Product and Cart associations
+// Product - Cart associations
 Product.hasMany(Cart, { foreignKey: 'productId' });
 Cart.belongsTo(Product, { foreignKey: 'productId' });
 
+// Variant - Cart associations
 Variant.hasMany(Cart, { foreignKey: 'variantId' });
 Cart.belongsTo(Variant, { foreignKey: 'variantId' });
 
-// Order associations
+// Order - User association
 Order.belongsTo(User, { foreignKey: 'userId' });
-Order.belongsTo(Product, { foreignKey: 'productId' });
-Order.belongsTo(Variant, { foreignKey: 'variantId' });
+User.hasMany(Order, { foreignKey: 'userId' });
 
-// Export models for use
-const models = {
+// Order - OrderProduct associations (multi-product order)
+Order.hasMany(OrderProduct, { foreignKey: 'orderId', as: 'orderItems' });
+OrderProduct.belongsTo(Order, { foreignKey: 'orderId' });
+
+Product.hasMany(OrderProduct, { foreignKey: 'productId' });
+OrderProduct.belongsTo(Product, { foreignKey: 'productId' });
+
+Variant.hasMany(OrderProduct, { foreignKey: 'variantId' });
+OrderProduct.belongsTo(Variant, { foreignKey: 'variantId' });
+
+// Order - Transaction association
+Order.hasOne(Transaction, { foreignKey: 'orderId' });
+Transaction.belongsTo(Order, { foreignKey: 'orderId' });
+
+module.exports = {
     sequelize,
     User,
     Chat,
@@ -81,13 +89,6 @@ const models = {
     Variant,
     VariantAttribute,
     Cart,
-    Shop, // Add Shop model here
+    Shop,
+    Transaction,
 };
-
-Object.values(models).forEach(model => {
-    if (typeof model.associate === 'function') {
-        model.associate(models);
-    }
-});
-
-module.exports = models;

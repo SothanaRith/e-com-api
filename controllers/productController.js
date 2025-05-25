@@ -8,12 +8,14 @@ const OrderProduct = require('../models/OrderProduct')
 const VariantAttribute = require('../models/VariantAttributeModel')
 const RelatedProduct = require('../models/RelatedProduct')
 const Cart = require("../models/Cart");
+const Transaction = require("../models/Transaction")
 const path = require("path");
 const upload = require("../controllers/uploadController");
 const { Wishlist, Product } = require('../models');
 const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
 const jwt = require('jsonwebtoken');
 const { encrypt, decrypt, generateTokens } = require('../utils/crypto');
+const sequelize = require('../config/db');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -368,63 +370,196 @@ exports.getProductById = async (req, res) => {
 exports.placeOrder = async (req, res) => {
     const { userId, items, paymentType } = req.body;
 
-    if (!userId || !items || !paymentType || !Array.isArray(items) || items.length === 0) {
+    if (
+        !userId ||
+        !items ||
+        !paymentType ||
+        !Array.isArray(items) ||
+        items.length === 0
+    ) {
         return res.status(400).json({ message: "Missing or invalid required fields" });
     }
 
-    const transaction = await sequelize.transaction(); // Start transaction
+    const transaction = await sequelize.transaction();
 
     try {
-        let totalAmount = 0;
-
         const user = await User.findByPk(userId);
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        const productUpdates = [];
-
-        for (const item of items) {
-            const product = await Product.findByPk(item.productId, { transaction });
-            if (!product) throw new Error(`Product ID ${item.productId} not found`);
-
-            if (product.stock < item.quantity) {
-                throw new Error(`Unavailable stock for ${product.name}`);
-            }
-
-            totalAmount += product.price * item.quantity;
-
-            productUpdates.push({
-                product,
-                newStock: product.stock - item.quantity,
-                quantity: item.quantity,
-                price: product.price
-            });
+        if (!user) {
+            await transaction.rollback();
+            return res.status(404).json({ message: "User not found" });
         }
 
-        const order = await Order.create({ userId, totalAmount, paymentType }, { transaction });
+        let totalAmount = 0;
 
-        for (const update of productUpdates) {
-            await update.product.update({ stock: update.newStock }, { transaction });
+        // Validate stock and calculate total amount
+        for (const item of items) {
+            const { productId, variantId, quantity } = item;
+
+            if (!productId || !quantity || quantity <= 0) {
+                throw new Error("Invalid item data");
+            }
+
+            const product = await Product.findByPk(productId, { transaction });
+            if (!product) throw new Error(`Product ID ${productId} not found`);
+
+            let stockAvailable;
+            let price;
+
+            if (variantId) {
+                const variant = await Variant.findOne({ where: { id: variantId, productId }, transaction });
+                if (!variant) throw new Error(`Variant not found for product ID ${productId}`);
+                stockAvailable = variant.stock;
+                price = variant.price;
+
+                if (quantity > stockAvailable) {
+                    throw new Error(`Insufficient stock for variant ${variant.sku}`);
+                }
+            } else {
+                stockAvailable = product.totalStock;
+                price = product.price;
+
+                if (quantity > stockAvailable) {
+                    throw new Error(`Insufficient stock for product ${product.name}`);
+                }
+            }
+
+            totalAmount += price * quantity;
+        }
+
+        // Create Order
+        const order = await Order.create({
+            userId,
+            totalAmount,
+            paymentType,
+            status: "pending",
+        }, { transaction });
+
+        // Create OrderProducts and reduce stock
+        for (const item of items) {
+            const { productId, variantId, quantity } = item;
+
+            let price;
+
+            if (variantId) {
+                const variant = await Variant.findOne({ where: { id: variantId, productId }, transaction });
+                price = variant.price;
+                await variant.decrement("stock", { by: quantity, transaction });
+            } else {
+                const product = await Product.findByPk(productId, { transaction });
+                price = product.price;
+                // Use totalStock here
+                await product.decrement("totalStock", { by: quantity, transaction });
+            }
 
             await OrderProduct.create({
                 orderId: order.id,
-                productId: update.product.id,
-                quantity: update.quantity,
-                price: update.price
+                productId,
+                variantId: variantId || null,
+                quantity,
+                price,
             }, { transaction });
         }
+
+        // Create Transaction record
+        await Transaction.create({
+            orderId: order.id,
+            paymentType,
+            amount: totalAmount,
+            status: "completed",
+        }, { transaction });
 
         await transaction.commit();
 
         return res.status(201).json({
             message: "Order placed successfully",
             orderId: order.id,
-            order
+            totalAmount,
         });
-
     } catch (error) {
-        await transaction.rollback(); // Revert changes on failure
+        await transaction.rollback();
         console.error("Error placing order:", error);
         return res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+};
+
+exports.getTransactionsByUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const transactions = await Transaction.findAll({
+            include: [
+                {
+                    model: Order,
+                    where: { userId },
+                    include: [
+                        {
+                            model: OrderProduct,
+                            include: [
+                                { model: Product, attributes: ['id', 'name', 'price'] }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            order: [['createdAt', 'DESC']]
+        });
+
+        return res.status(200).json(transactions);
+    } catch (error) {
+        console.error('Error fetching transactions:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.cancelOrder = async (req, res) => {
+    const { id } = req.params;
+
+    const transaction = await sequelize.transaction();
+    try {
+        const order = await Order.findByPk(id, {
+            include: [Product, { model: Transaction }],
+            transaction
+        });
+
+        if (!order) {
+            await transaction.rollback();
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        // Prevent duplicate cancel
+        if (order.status === 'cancelled') {
+            await transaction.rollback();
+            return res.status(400).json({ message: 'Order already cancelled' });
+        }
+
+        // 1. Mark order as cancelled
+        order.status = 'cancelled';
+        await order.save({ transaction });
+
+        // 2. Optional: Mark transaction as cancelled
+        if (order.Transaction) {
+            order.Transaction.status = 'cancelled';
+            await order.Transaction.save({ transaction });
+        }
+
+        // 3. Optional: Restock products (simplified)
+        const orderItems = await OrderProduct.findAll({ where: { orderId: order.id }, transaction });
+        for (const item of orderItems) {
+            const product = await Product.findByPk(item.productId, { transaction });
+            if (product) {
+                product.stock += item.quantity;
+                await product.save({ transaction });
+            }
+        }
+
+        await transaction.commit();
+
+        return res.status(200).json({ message: 'Order and transaction cancelled successfully' });
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Cancel order error:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
 
@@ -913,41 +1048,17 @@ exports.getOrdersByUser = async (req, res) => {
 
 exports.addToWishlist = async (req, res) => {
     try {
-      const { userId, productId, quantity } = req.body;
-  
-      if (!userId || !productId || !quantity || quantity <= 0) {
-        return res.status(400).json({ message: 'Invalid input' });
-      }
-  
-      // Check if product exists
-      const product = await Product.findByPk(productId);
-      if (!product) {
-        return res.status(404).json({ message: 'Product not found' });
-      }
-  
-      // Find existing cart item
-      let cartItem = await Cart.findOne({ where: { userId, productId } });
-  
-      if (cartItem) {
-        // Update quantity (replace or add - here we replace with new quantity)
-        cartItem.quantity = quantity;
-        await cartItem.save();
-        return res.status(200).json({ message: 'Cart updated', cartItem });
-      } else {
-        // Create new cart item
-        cartItem = await Cart.create({
-          userId,
-          productId,
-          quantity,
-          priceAtPurchase: product.price
-        });
-        return res.status(201).json({ message: 'Added to cart', cartItem });
-      }
+        const { userId, productId } = req.body;
+
+        const exists = await Wishlist.findOne({ where: { userId, productId } });
+        if (exists) return res.status(409).json({ message: 'Product already in wishlist' });
+
+        const wishlist = await Wishlist.create({ userId, productId });
+        return res.status(201).json({ message: 'Added to wishlist', wishlist });
     } catch (error) {
-      console.error('Error updating cart:', error);
-      return res.status(500).json({ message: 'Server error', error: error.message });
+        return res.status(500).json({ message: 'Server error', error: error.message });
     }
-  };
+};
 // Get wishlist for user
 exports.getWishlist = async (req, res) => {
     try {
@@ -959,10 +1070,10 @@ exports.getWishlist = async (req, res) => {
             include: [
                 {
                     model: Product,
+                    as: 'product',   // <-- add alias here matching your model association
                     attributes: ['id', 'name', 'price', 'imageUrl'],
                 }
             ],
-
         });
 
         // Process the wishlist data as needed
