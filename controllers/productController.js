@@ -314,7 +314,7 @@ exports.getProductById = async (req, res) => {
                 {
                     model: Product,
                     as: 'RelatedProducts',
-                    attributes: ['id', 'name', 'price'],
+                    attributes: ['id', 'name', 'price', 'imageUrl'],
                     through: { attributes: [] }
                 },
                 ...(userId ? [{
@@ -340,14 +340,16 @@ exports.getProductById = async (req, res) => {
         prod.categoryId = prod.Category?.id || null;
         delete prod.Category;
 
+        // Parse imageUrl of main product
         if (typeof prod.imageUrl === 'string') {
             try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch { prod.imageUrl = []; }
         }
 
+        // Wishlist flag
         prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
         delete prod.Wishlists;
 
-        // Add isInCart flag and quantity
+        // Cart info
         if (userId) {
             if (prod.Carts && prod.Carts.length > 0) {
                 prod.isInCart = true;
@@ -357,6 +359,20 @@ exports.getProductById = async (req, res) => {
                 prod.cartQuantity = 0;
             }
             delete prod.Carts;
+        }
+
+        // Parse imageUrl for related products
+        if (prod.RelatedProducts && Array.isArray(prod.RelatedProducts)) {
+            prod.RelatedProducts = prod.RelatedProducts.map(relProd => {
+                if (typeof relProd.imageUrl === 'string') {
+                    try {
+                        relProd.imageUrl = JSON.parse(relProd.imageUrl);
+                    } catch {
+                        relProd.imageUrl = [];
+                    }
+                }
+                return relProd;
+            });
         }
 
         return res.status(200).json(prod);
@@ -1064,20 +1080,45 @@ exports.getWishlist = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        // Fetch the wishlist for the user
         const wishlist = await Wishlist.findAll({
             where: { userId },
             include: [
                 {
                     model: Product,
-                    as: 'product',   // <-- add alias here matching your model association
+                    as: 'product',
                     attributes: ['id', 'name', 'price', 'imageUrl'],
+                    include: [
+                        {
+                            model: Cart,
+                            where: { userId },
+                            required: false,
+                            attributes: ['quantity']
+                        }
+                    ]
                 }
             ],
         });
 
-        // Process the wishlist data as needed
-        return res.status(200).json(wishlist);
+        const formatted = wishlist.map(item => {
+            const prod = item.product.toJSON();
+
+            // Parse imageUrl if needed
+            if (typeof prod.imageUrl === 'string') {
+                try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
+            }
+
+            // Include cart status
+            prod.isInCart = prod.Carts && prod.Carts.length > 0;
+            prod.cartQuantity = prod.isInCart ? prod.Carts[0].quantity : 0;
+            delete prod.Carts;
+
+            return {
+                id: item.id,
+                product: prod,
+            };
+        });
+
+        return res.status(200).json(formatted);
     } catch (error) {
         console.error('Wishlist error:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
