@@ -95,6 +95,8 @@ exports.login = async (req, res) => {
     // Generate new Tokens
     const { accessToken, refreshToken } = await generateTokens(user);
 
+    user.isVerify = false;
+
     // Save new hashedRefreshToken and tokenVersion
     await user.save();
 
@@ -165,11 +167,16 @@ exports.verifyOtp = async (req, res) => {
     const decryptedToken = decrypt(token);
     const decoded = jwt.verify(decryptedToken, JWT_SECRET);
 
+
     const userId = decoded.id;
     const user = await User.findOne({ where: { id: userId } });
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (decoded.tokenVersion !== user.tokenVersion) {
+      return res.status(401).json({ success: false, message: 'Token expired. Please re-login.'});
     }
 
     // Validate OTP
@@ -180,11 +187,12 @@ exports.verifyOtp = async (req, res) => {
     }
 
     // Generate new tokens
-    const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
-
     // Clear OTP data & save new refresh token
     user.passwordResetOtp = null;
     user.passwordResetExpires = null;
+    user.isVerify = true;
+
+    const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
     user.hashedRefreshToken = hashedRefreshToken;
 
     await user.save();
@@ -207,24 +215,42 @@ exports.verifyOtp = async (req, res) => {
 };
 
 exports.refreshToken = async (req, res) => {
-  const { refreshToken } = req.body;
+  const { refreshToken: encryptedRefreshToken, email } = req.body;
 
-  if (!refreshToken) return res.status(401).json({ message: 'No refresh token' });
+  if (!encryptedRefreshToken || !email) {
+    return res.status(401).json({ message: 'Email and refresh token are required' });
+  }
 
   try {
-    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    const rawRefreshToken = decrypt(encryptedRefreshToken);
 
-    const user = await User.findOne({ where: { id: decoded.id, refreshToken } });
+    const user = await User.findOne({ where: { email } });
 
-    if (!user) return res.status(401).json({ message: 'Invalid refresh token' });
+    if (!user || !user.hashedRefreshToken) {
+      return res.status(403).json({ message: 'Invalid token or user not found' });
+    }
 
-    const newAccessToken = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '15m' });
+    const isMatch = await bcrypt.compare(rawRefreshToken, user.hashedRefreshToken);
 
-    res.json({ accessToken: newAccessToken });
+    if (!isMatch) {
+      return res.status(403).json({ message: 'Invalid token' });
+    }
+
+    const newAccessToken = jwt.sign(
+        { id: user.id, role: user.role, tokenVersion: user.tokenVersion },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' }
+    );
+
+    return res.json({
+      accessToken: encrypt(newAccessToken)
+    });
+
   } catch (err) {
-    res.status(403).json({ message: 'Invalid token' });
+    console.error('Refresh token error:', err);
+    return res.status(500).json({ message: 'Token decryption or validation failed', error: err.message });
   }
-}
+};
 
 exports.resetPassword = async (req, res) => {
   const { newPassword } = req.body;
@@ -294,6 +320,8 @@ exports.sendOtpForReset = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
     const otpExpiryMinutes = parseInt(process.env.OTP_EXPIRY_MINUTES) || 5;
@@ -315,7 +343,7 @@ exports.sendOtpForReset = async (req, res) => {
       `
     });
 
-    res.status(200).json({ success: true, message: 'OTP sent successfully to your email' });
+    res.status(200).json({ success: true, message: 'OTP sent successfully to your email', accessToken, refreshToken  });
 
   } catch (error) {
     console.error('Error sending OTP:', error);

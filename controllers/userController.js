@@ -1,6 +1,7 @@
 const { User } = require('../models');
 const jwt = require('jsonwebtoken');
 const { encrypt, decrypt, generateTokens } = require('../utils/crypto');
+const Blacklist = require("../models/Blacklist");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
@@ -52,36 +53,59 @@ exports.listUsers = async (req, res) => {
     }
   };
 
-  exports.getProfile = async (req, res) => {
-    try {
-      // Extract the token from the Authorization header
-      const token = req.header('Authorization')?.split(' ')[1];
-  
-      if (!token) {
-        return res.status(401).json({ success: false, message: 'Access token required' });
-      }
-  
-      // Verify and decode the token
-      const decoded = jwt.verify(decrypt(token), JWT_SECRET);
-      const userId = decoded.id;
-  
-      // Fetch user by decoded ID, excluding sensitive fields
-      const user = await User.findByPk(userId, {
-        attributes: { exclude: ['password', 'activeToken', 'passwordResetOtp', 'passwordResetExpires'] },
-      });
-  
-      if (!user) {
-        return res.status(404).json({ success: false, message: 'User not found' });
-      }
-  
-      // Filter out null or empty fields
-      const filteredUser = Object.fromEntries(
-        Object.entries(user.toJSON()).filter(([key, value]) => value !== null && value !== "")
-      );
-  
-      res.status(200).json({ success: true, filteredUser });
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      res.status(500).json({ success: false, message: 'Error fetching user profile', error: error.message });
+exports.getProfile = async (req, res) => {
+  try {
+    const encryptedToken = req.header('Authorization')?.split(' ')[1];
+
+    if (!encryptedToken) {
+      return res.status(401).json({ success: false, message: 'Access token required' });
     }
-  };
+
+    let decryptedToken;
+    let decoded;
+
+    try {
+      // Decrypt and verify token
+      decryptedToken = decrypt(encryptedToken);
+      console.log('Decrypted token:', decryptedToken);
+      decoded = jwt.verify(decryptedToken, JWT_SECRET);
+      if (!decoded.isVerified) {
+        return res.status(403).json({
+          success: false,
+          message: 'Account not verified. Please complete OTP verification.',
+        });
+      }
+
+    } catch (err) {
+      // If token is expired, blacklist it
+      if (err.name === 'TokenExpiredError') {
+        const expiredDecoded = jwt.decode(decryptedToken);
+        if (expiredDecoded) {
+          await Blacklist.create({
+            token: decryptedToken,
+            expiresAt: new Date(expiredDecoded.exp * 1000),
+          });
+        }
+      }
+      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    }
+
+    // Get user using decoded token
+    const user = await User.findByPk(decoded.id, {
+      attributes: { exclude: ['password', 'hashedRefreshToken', 'passwordResetOtp', 'passwordResetExpires'] },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const filteredUser = Object.fromEntries(
+        Object.entries(user.toJSON()).filter(([_, value]) => value !== null && value !== "")
+    );
+
+    return res.status(200).json({ success: true, filteredUser });
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching user profile', error: error.message });
+  }
+};

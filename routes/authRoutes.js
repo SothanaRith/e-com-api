@@ -14,7 +14,7 @@ router.post('/register', register);
 router.post('/login', login, loginLimiter);
 router.post('/check-mail', checkMail, loginLimiter);
 router.post('/send-otp', sendOtpForReset);
-router.post('/verify-otp', authenticateToken, verifyOtp);
+router.post('/verify-otp', verifyOtp);
 router.post('/refresh-token', refreshToken);
 router.post('/reset-password', authenticateToken, resetPassword);
 router.post('/logout', authenticateToken, logout);

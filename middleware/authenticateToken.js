@@ -47,6 +47,10 @@ const authenticateToken = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Token expired. Please re-login.'});
     }
 
+    if (!decoded.isVerified) {
+      return { error: { status: 403, message: 'Account not verified. Please complete OTP verification.' } };
+    }
+
     req.user = { id: user.id, role: user.role };
     next();
 
