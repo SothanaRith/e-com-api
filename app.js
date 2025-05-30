@@ -15,6 +15,9 @@ const productRoute = require("./routes/productRoute");
 const loadHomeRoute = require("./routes/loadHomeRoute");
 const vendorRoute = require("./routes/vendorRoute");
 const adminRoute = require("./routes/adminRoute");
+const roleRoute = require("./routes/roleRoute");
+const permissionRoute = require("./routes/permissionRoute");
+
 
 const sampleCategories = require("./helpers/sampleCategories");
 const Category = require("./models/Category");
@@ -48,6 +51,8 @@ app.use("/api/product", productRoute);
 app.use("/api/home", loadHomeRoute);
 app.use("/api/vendor", vendorRoute);
 app.use("/api/admin", adminRoute);
+app.use("/api/role", roleRoute);
+app.use("/api/permission", permissionRoute);
 
 // Sync database and start server
 sequelize.sync({ alter: true }).then(() => {

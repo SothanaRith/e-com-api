@@ -12,6 +12,15 @@ const VariantAttribute = require('./VariantAttributeModel');
 const Cart = require('./Cart');
 const Shop = require('./Shop');
 const Transaction = require('./Transaction');
+const Role = require('./Role');
+const PermissionModel = require('./PermissionModel');
+
+User.belongsToMany(Role, {through: 'UserRoles', foreignKey: 'userId', otherKey: 'roleId', as: 'roles',});
+Role.belongsToMany(User, {through: 'UserRoles', foreignKey: 'roleId', otherKey: 'userId', as: 'users',});
+
+// Role-Permission Many-to-Many
+Role.belongsToMany(PermissionModel, {through: 'RolePermissions', foreignKey: 'roleId', otherKey: 'permissionId', as: 'permissions'});
+PermissionModel.belongsToMany(Role, {through: 'RolePermissions', foreignKey: 'permissionId', otherKey: 'roleId', as: 'roles'});
 
 // Chat associations
 User.hasMany(Chat, { foreignKey: 'sender_id', as: 'SentMessages' });
@@ -20,8 +29,8 @@ Chat.belongsTo(User, { foreignKey: 'sender_id', as: 'Sender' });
 Chat.belongsTo(User, { foreignKey: 'receiver_id', as: 'Receiver' });
 
 // Review associations
-Review.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
-User.hasMany(Review, { foreignKey: 'userId' });
+// Review.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+// User.hasMany(Review, { foreignKey: 'userId' });
 
 // Wishlist associations
 User.hasMany(Wishlist, { foreignKey: 'userId', as: 'Wishlists', onDelete: 'CASCADE' });
@@ -91,4 +100,6 @@ module.exports = {
     Cart,
     Shop,
     Transaction,
+    Role,
+    PermissionModel
 };

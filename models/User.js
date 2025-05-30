@@ -1,12 +1,12 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
-
-const User = sequelize.define('User', {
+const  RoleModel = require('./Role');
+const User = sequelize.define('Users', {
   name: { type: DataTypes.STRING, allowNull: false },
   email: {
     type: DataTypes.STRING,
     allowNull: false,
-    unique: false,  
+    unique: false,
     validate: { isEmail: true },
   },
   tokenVersion: {
@@ -29,22 +29,32 @@ const User = sequelize.define('User', {
   isFollower: { type: DataTypes.BOOLEAN, defaultValue: false },
   isBlock: { type: DataTypes.BOOLEAN, defaultValue: false },
   userQR: { type: DataTypes.STRING },
-
+  
   password: { type: DataTypes.STRING, allowNull: false },
   phone: { type: DataTypes.STRING },
-  role: {
-    type: DataTypes.ENUM("buyer", "seller", "vendor", "admin"),
-    allowNull: false,
-    defaultValue: "buyer"
+  // role: {
+  //   type: DataTypes.ENUM("buyer", "seller", "vendor", "admin"),
+  //   allowNull: false,
+  //   defaultValue: "buyer"
+  // },
+  
+  roleId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Role', // TABLE NAME as string, NOT the Sequelize model variable
+      key: 'id',
+      
+    },
   },
   status: {
-    type: DataTypes.ENUM('pending', 'pending_approval', 'approved', 'rejected'),
+    type: DataTypes.ENUM('pending', 'pending_approval', 'approved', 'rejected', 'active'),
     defaultValue: 'pending',
   },
   
   lastActive: { type: DataTypes.DATE, allowNull: true },
   createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
-  updatedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }, 
+  updatedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   passwordResetOtp: { type: DataTypes.STRING, allowNull: true },
   passwordResetExpires: { type: DataTypes.DATE, allowNull: true },
   activeToken: { type: DataTypes.STRING, allowNull: true },

@@ -1,9 +1,9 @@
 const { Sequelize } = require('sequelize');
 
-const sequelize = new Sequelize('project_school', 'root', '', {
+const sequelize = new Sequelize('node-api-ecom', 'root', '', {
   host: 'localhost', // Change this if your MySQL is hosted elsewhere
   dialect: 'mysql',
-  port: 3306,
+  port: 8092,
   logging: false, // Disable logging for cleaner output
 });
 
