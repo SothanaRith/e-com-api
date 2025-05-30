@@ -364,7 +364,6 @@ exports.logout = async (req, res) => {
 
   try {
     const decryptedToken = decrypt(encryptedToken);
-
     let decoded;
     try {
       decoded = jwt.verify(decryptedToken, JWT_SECRET);
