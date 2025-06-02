@@ -476,12 +476,17 @@ exports.placeOrder = async (req, res) => {
             }, { transaction });
         }
 
+        await Cart.destroy({
+            where: { userId },
+            transaction
+        });
+
         // Create Transaction record
         await Transaction.create({
             orderId: order.id,
             paymentType,
             amount: totalAmount,
-            status: "completed",
+            status: "pending",
         }, { transaction });
 
         await transaction.commit();
@@ -500,9 +505,10 @@ exports.placeOrder = async (req, res) => {
 
 exports.getTransactionsByUser = async (req, res) => {
     try {
-        const { userId } = req.params;
+        const { userId, status } = req.params;
 
         const transactions = await Transaction.findAll({
+            where: { status },
             include: [
                 {
                     model: Order,
@@ -510,6 +516,7 @@ exports.getTransactionsByUser = async (req, res) => {
                     include: [
                         {
                             model: OrderProduct,
+                            as: 'orderItems',  // <--- add this alias
                             include: [
                                 { model: Product, attributes: ['id', 'name', 'price'] }
                             ]
