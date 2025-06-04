@@ -518,7 +518,7 @@ exports.getTransactionsByUser = async (req, res) => {
                             model: OrderProduct,
                             as: 'orderItems',  // <--- add this alias
                             include: [
-                                { model: Product, attributes: ['id', 'name', 'price'] }
+                                { model: Product, attributes: ['id', 'name', 'price', 'imageUrl'] }
                             ]
                         }
                     ]
