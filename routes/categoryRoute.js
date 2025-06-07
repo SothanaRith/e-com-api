@@ -8,6 +8,6 @@ router.post('/create-category', createCategory);
 router.post("/create-category", upload.single("image"), createCategory);
 router.get('/get-all-categories', getAllCategories);
 router.put('/update-category/:id', updateCategory);
-router.get("/categories/:categoryId", getProductByCategory);
+router.get("/categories/:categoryId/userId/:userId", getProductByCategory);
 
 module.exports = router;
