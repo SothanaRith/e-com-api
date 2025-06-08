@@ -30,7 +30,8 @@ const generateTokens = async (user) => {
   const rawRefreshToken = crypto.randomBytes(64).toString('hex');
   const hashedRefreshToken = await bcrypt.hash(rawRefreshToken, 10);
 
-  user.tokenVersion += 1;
+  // Ensure user.tokenVersion is a string and then increment it
+  user.tokenVersion = (parseInt(user.tokenVersion) + 1).toString();
   user.hashedRefreshToken = hashedRefreshToken;
   await user.save();
 

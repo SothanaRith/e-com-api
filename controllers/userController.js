@@ -131,8 +131,12 @@ exports.updateUserById = async (req, res) => {
       status: status || user.status,
     });
 
+            const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
+    user.hashedRefreshToken = hashedRefreshToken;
+
+
     // Respond with updated user data
-    return res.status(200).json({ success: true, message: 'User updated successfully', user });
+    return res.status(200).json({ success: true, message: 'User updated successfully', accessToken, refreshToken });
   } catch (error) {
     console.error('Error updating user:', error);
     return res.status(500).json({ success: false, message: 'Error updating user', error: error.message });
@@ -141,24 +145,30 @@ exports.updateUserById = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   const { id } = req.params;  // Get user ID from request parameters
-  const { profilePicture } = req.body;  // Extract fields to update from the request body
 
   try {
     // Find the user by their ID
     const user = await User.findByPk(id);
 
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
     // If user not found, return an error
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-
     // Update user profile fields
     await user.update({
-      coverImage: profilePicture || user.coverImage,
+      coverImage: `/uploads/${file.filename}` || user.coverImage,
     });
 
+        const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
+    user.hashedRefreshToken = hashedRefreshToken;
+
     // Respond with updated user profile data
-    return res.status(200).json({ success: true, message: 'Profile updated successfully', user });
+    return res.status(200).json({ success: true, message: 'Profile updated successfully', accessToken, refreshToken });
   } catch (error) {
     console.error('Error updating user profile:', error);
     return res.status(500).json({ success: false, message: 'Error updating profile', error: error.message });
