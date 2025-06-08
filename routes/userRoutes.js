@@ -7,5 +7,7 @@ const { authenticateToken } = require('../middleware/authenticateToken'); // Ass
 router.get('/getUsers',userController.getAllUsers);
 router.get('/getProfile/:id', userController.getProfileById);
 router.get('/getProfile',authenticateToken, userController.getProfile);
+router.put('/updateProfile/:id', authenticateToken, userController.updateUserById);  // Update a user by ID
+router.put('/updateProfilePicture/:id', authenticateToken, userController.updateProfile);  // Update a user by ID
 
 module.exports = router;

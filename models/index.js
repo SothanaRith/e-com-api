@@ -11,6 +11,7 @@ const Variant = require('./VariantModel');
 const VariantAttribute = require('./VariantAttributeModel');
 const Cart = require('./Cart');
 const Shop = require('./Shop');
+const Slide = require('./Slide');
 const Transaction = require('./Transaction');
 const Role = require('./Role');
 const PermissionModel = require('./PermissionModel');
@@ -99,6 +100,7 @@ module.exports = {
     VariantAttribute,
     Cart,
     Shop,
+    Slide,
     Transaction,
     Role,
     PermissionModel

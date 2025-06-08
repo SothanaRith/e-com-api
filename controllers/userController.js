@@ -31,7 +31,7 @@ exports.listUsers = async (req, res) => {
     }
   };
 
-  exports.getProfileById = async (req, res) => {
+exports.getProfileById = async (req, res) => {
     const { id } = req.params;
   
     try {
@@ -107,5 +107,60 @@ exports.getProfile = async (req, res) => {
   } catch (error) {
     console.error('Error fetching user profile:', error);
     return res.status(500).json({ success: false, message: 'Error fetching user profile', error: error.message });
+  }
+};
+
+exports.updateUserById = async (req, res) => {
+  const { id } = req.params;  // Get user ID from request parameters
+  const { name, email, role, status } = req.body;  // Extract fields to update from the request body
+
+  try {
+    // Find the user by their ID
+    const user = await User.findByPk(id);
+
+    // If user not found, return an error
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Update user fields
+    await user.update({
+      name: name || user.name,
+      email: email || user.email,
+      role: role || user.role,
+      status: status || user.status,
+    });
+
+    // Respond with updated user data
+    return res.status(200).json({ success: true, message: 'User updated successfully', user });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return res.status(500).json({ success: false, message: 'Error updating user', error: error.message });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  const { id } = req.params;  // Get user ID from request parameters
+  const { profilePicture } = req.body;  // Extract fields to update from the request body
+
+  try {
+    // Find the user by their ID
+    const user = await User.findByPk(id);
+
+    // If user not found, return an error
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Update user profile fields
+    await user.update({
+      coverImage: profilePicture || user.coverImage,
+    });
+
+    // Respond with updated user profile data
+    return res.status(200).json({ success: true, message: 'Profile updated successfully', user });
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    return res.status(500).json({ success: false, message: 'Error updating profile', error: error.message });
   }
 };
