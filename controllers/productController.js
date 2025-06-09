@@ -9,6 +9,7 @@ const VariantAttribute = require('../models/VariantAttributeModel')
 const RelatedProduct = require('../models/RelatedProduct')
 const Cart = require("../models/Cart");
 const Transaction = require("../models/Transaction")
+const DeliveryAddress = require("../models/DeliveryAddress");
 const path = require("path");
 const upload = require("../controllers/uploadController");
 const { Wishlist, Product } = require('../models');
@@ -16,7 +17,7 @@ const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
 const jwt = require('jsonwebtoken');
 const { encrypt, decrypt, generateTokens } = require('../utils/crypto');
 const sequelize = require('../config/db');
-
+const { Sequelize } = require('sequelize');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 exports.createProduct = async (req, res) => {
@@ -384,25 +385,39 @@ exports.getProductById = async (req, res) => {
 };
 
 exports.placeOrder = async (req, res) => {
-    const { userId, items, paymentType } = req.body;
+    const { userId, items, paymentType, deliveryAddressId } = req.body;  // Added addressId
 
-    if (
-        !userId ||
-        !items ||
-        !paymentType ||
-        !Array.isArray(items) ||
-        items.length === 0
-    ) {
+    if (!userId || !items || !paymentType || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ message: "Missing or invalid required fields" });
     }
 
     const transaction = await sequelize.transaction();
 
     try {
+        // Fetch the user
         const user = await User.findByPk(userId);
         if (!user) {
             await transaction.rollback();
             return res.status(404).json({ message: "User not found" });
+        }
+
+        // Fetch the address (either default or provided address)
+        let address;
+        if (deliveryAddressId) {
+            address = await DeliveryAddress.findByPk(deliveryAddressId);
+            if (!address) {
+                await transaction.rollback();
+                return res.status(404).json({ message: "Address not found" });
+            }
+        } else {
+            // If no addressId provided, get the default address
+            address = await DeliveryAddress.findOne({
+                where: { userId, isDefault: true },
+            });
+            if (!address) {
+                await transaction.rollback();
+                return res.status(404).json({ message: "Default address not found" });
+            }
         }
 
         let totalAmount = 0;
@@ -442,12 +457,13 @@ exports.placeOrder = async (req, res) => {
             totalAmount += price * quantity;
         }
 
-        // Create Order
+        // Create Order and link to the address
         const order = await Order.create({
             userId,
             totalAmount,
             paymentType,
             status: "pending",
+            deliveryAddressId,  // Link the address to the order
         }, { transaction });
 
         // Create OrderProducts and reduce stock
@@ -463,7 +479,6 @@ exports.placeOrder = async (req, res) => {
             } else {
                 const product = await Product.findByPk(productId, { transaction });
                 price = product.price;
-                // Use totalStock here
                 await product.decrement("totalStock", { by: quantity, transaction });
             }
 
@@ -495,6 +510,7 @@ exports.placeOrder = async (req, res) => {
             message: "Order placed successfully",
             orderId: order.id,
             totalAmount,
+            address: address,  // Return the address information in the response
         });
     } catch (error) {
         await transaction.rollback();
@@ -516,10 +532,16 @@ exports.getTransactionsByUser = async (req, res) => {
                     include: [
                         {
                             model: OrderProduct,
-                            as: 'orderItems',  // <--- add this alias
+                            as: 'orderItems',  // Alias for order items
                             include: [
                                 { model: Product, attributes: ['id', 'name', 'price', 'imageUrl'] }
                             ]
+                        },
+                        {
+                            model: DeliveryAddress,  // Include the DeliveryAddress based on deliveryAddressId
+                            as: 'address',  // Alias for the address
+                            required: false,  // Make it optional if not all orders have an address
+                            where: { id: Sequelize.col('Order.deliveryAddressId') },  // Correctly reference the column
                         }
                     ]
                 }

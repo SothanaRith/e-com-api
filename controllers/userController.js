@@ -112,7 +112,7 @@ exports.getProfile = async (req, res) => {
 
 exports.updateUserById = async (req, res) => {
   const { id } = req.params;  // Get user ID from request parameters
-  const { name, email, role, status } = req.body;  // Extract fields to update from the request body
+  const { name, phone } = req.body;  // Extract fields to update from the request body
 
   try {
     // Find the user by their ID
@@ -126,9 +126,7 @@ exports.updateUserById = async (req, res) => {
     // Update user fields
     await user.update({
       name: name || user.name,
-      email: email || user.email,
-      role: role || user.role,
-      status: status || user.status,
+      phone: phone || user.phone,
     });
 
             const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);

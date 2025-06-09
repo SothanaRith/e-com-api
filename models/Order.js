@@ -1,6 +1,7 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
 const User = require("./User");
+const DeliveryAddress = require("./DeliveryAddress");
 
 const Order = sequelize.define("Order", {
   id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
@@ -22,11 +23,17 @@ const Order = sequelize.define("Order", {
     type: DataTypes.ENUM("pending", "completed", "cancelled"),
     defaultValue: "pending",
   },
+  deliveryAddressId: { // Foreign Key to DeliveryAddress
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        onDelete: 'SET NULL',  // If the address is deleted, set this field to null
+    },
 }, {
   tableName: "Orders",
   timestamps: true,
 });
 
+Order.belongsTo(DeliveryAddress, { foreignKey: 'deliveryAddressId', as: 'address' });
 Order.belongsTo(User, { foreignKey: "userId" });
 
 module.exports = Order;
