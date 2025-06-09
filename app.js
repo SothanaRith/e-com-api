@@ -29,6 +29,7 @@ const Review = require("./models/Review");
 const {Product} = require("./models");
 const sampleProducts = require("./helpers/sampleProducts");
 const sampleVariants = require("./helpers/sampleVariants");
+const notificationRoutes = require('./routes/notificationRoutes'); // Import the notification routes
 
 
 const app = express();
@@ -55,6 +56,7 @@ app.use("/api/admin", adminRoute);
 app.use("/api/role", roleRoute);
 app.use("/api/permission", permissionRoute);
 app.use("/api/delivery-addresses", deliveryAddressRoutes);
+app.use("/api/notification", notificationRoutes);
 
 // Sync database and start server
 sequelize.sync({ alter: true }).then(() => {
