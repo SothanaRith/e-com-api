@@ -1,5 +1,5 @@
 const admin = require('firebase-admin');
-const serviceAccount = require("path/to/your/firebase-service-account-key.json");
+const serviceAccount = require("./snapbuy-da708-firebase-adminsdk-fbsvc-7fd0c770d6.json");
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
