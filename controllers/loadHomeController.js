@@ -1,5 +1,6 @@
 const { Category, Product, Wishlist, Cart, Slide } = require("../models");
 const { successResponse, failResponse } = require("../utils/baseResponse");
+const Notification = require('../models/Notification');
 
 exports.loadHome = async (req, res) => {
   try {
@@ -62,6 +63,17 @@ exports.loadHome = async (req, res) => {
       return prod;
     });
 
+        // Fetch the total unread notifications for the user
+    let unreadNotificationsCount = 0;
+    if (userId) {
+      unreadNotificationsCount = await Notification.count({
+        where: {
+          userId,
+          status: 'unread', // Assuming the status of unread notifications is stored as 'unread'
+        }
+      });
+    }
+
     // Fetch active slides
     const slides = await Slide.findAll({ where: { isActive: true }, order: [["order", "ASC"]] });
 
@@ -69,6 +81,7 @@ exports.loadHome = async (req, res) => {
     return res.status(200).json(successResponse("Home data fetched successfully", {
       categories,
       products: processedProducts,
+      unreadNotificationsCount,
       slides, // Include slides in the response
       pagination: {
         currentPage: page,
