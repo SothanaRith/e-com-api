@@ -14,6 +14,7 @@ router.delete("/delete/:productId", productController.deleteProduct);
 router.post("/buy/:userId", productController.buyProduct);
 router.post("/place-order", productController.placeOrder);
 router.get("/orders/:userId", productController.getOrdersByUser);
+router.put('/orders/:orderId/status', productController.updateOrderStatus);
 router.get('/transactions/:status/:userId', productController.getTransactionsByUser);
 
 // Product reviews

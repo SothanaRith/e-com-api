@@ -10,6 +10,7 @@ const RelatedProduct = require('../models/RelatedProduct')
 const Cart = require("../models/Cart");
 const Transaction = require("../models/Transaction")
 const DeliveryAddress = require("../models/DeliveryAddress");
+const OrderTracking = require("../models/OrderTracking");
 const path = require("path");
 const upload = require("../controllers/uploadController");
 const { Wishlist, Product } = require('../models');
@@ -466,6 +467,11 @@ exports.placeOrder = async (req, res) => {
             deliveryAddressId,  // Link the address to the order
         }, { transaction });
 
+        await OrderTracking.create({
+        orderId: order.id,
+        status: "Order Placed",
+        timestamp: new Date()
+        }, { transaction });
         // Create OrderProducts and reduce stock
         for (const item of items) {
             const { productId, variantId, quantity } = item;
@@ -542,6 +548,13 @@ exports.getTransactionsByUser = async (req, res) => {
                             as: 'address',  // Alias for the address
                             required: false,  // Make it optional if not all orders have an address
                             where: { id: Sequelize.col('Order.deliveryAddressId') },  // Correctly reference the column
+                        },
+                        {
+                        model: OrderTracking,
+                        as: 'trackingSteps',
+                        attributes: ['status', 'timestamp'],
+                        separate: true,
+                        order: [['timestamp', 'ASC']]
                         }
                     ]
                 }
@@ -555,6 +568,55 @@ exports.getTransactionsByUser = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
+
+exports.updateOrderStatus = async (req, res) => {
+  const { orderId } = req.params;
+  const { status } = req.body;
+
+  const allowedStatuses = ['in progress', 'delivery', 'delivered', 'cancelled', 'completed'];
+
+  if (!allowedStatuses.includes(status.toLowerCase())) {
+    return res.status(400).json({ message: 'Invalid status value' });
+  }
+
+  const transaction = await sequelize.transaction();
+
+  try {
+    const order = await Order.findByPk(orderId, { transaction });
+    if (!order) {
+      await transaction.rollback();
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (status === 'cancelled' || status === 'completed') {
+    // Update order's main status field (optional if needed)
+        order.status = status.toLowerCase();
+        await order.save({ transaction });
+
+    }
+
+    // Log tracking entry
+    await OrderTracking.create({
+      orderId: order.id,
+      status: capitalizeWords(status),
+      timestamp: new Date()
+    }, { transaction });
+
+    await transaction.commit();
+
+    return res.status(200).json({ message: 'Order status updated successfully' });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Error updating order status:', error);
+    return res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Helper function
+function capitalizeWords(str) {
+  return str.replace(/\b\w/g, char => char.toUpperCase());
+}
 
 exports.cancelOrder = async (req, res) => {
     const { id } = req.params;
@@ -762,6 +824,7 @@ exports.getProductReviews = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
+
 exports.searchProducts = async (req, res) => {
     try {
         const { userId } = req.params;
