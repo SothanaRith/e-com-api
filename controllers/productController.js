@@ -1228,3 +1228,98 @@ exports.removeFromWishlist = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
+exports.getAdminGroupedOrders = async (req, res) => {
+    try {
+        const { searchQuery, itemsPerPage = 10, page = 1, sortBy = 'createdAt', orderBy = 'DESC' } = req.query;
+        const statuses = ['pending', 'delivered', 'completed'];
+
+        // Prepare an object to hold grouped results
+        const result = {};
+
+        // Convert pagination values to integers
+        const limit = parseInt(itemsPerPage);
+        const offset = (parseInt(page) - 1) * limit;
+
+        // For pagination: calculate the total number of orders for each status
+        const paginationInfo = {};
+
+        for (const status of statuses) {
+            // First, get the count of orders for pagination
+            const totalCount = await Order.count({
+                where: {
+                    status,
+                    ...(searchQuery ? {
+                        [Op.or]: [
+                            { 'name': { [Op.like]: `%${searchQuery}%` } },
+                            { 'email': { [Op.like]: `%${searchQuery}%` } }
+                        ]
+                    } : {})
+                },
+            });
+
+            // Calculate total pages
+            const totalPages = Math.ceil(totalCount / limit);
+
+            // Get the orders for the current page
+            const orders = await Order.findAll({
+                where: {
+                    status,
+                    ...(searchQuery ? {
+                        [Op.or]: [
+                            { 'name': { [Op.like]: `%${searchQuery}%` } },
+                            { 'email': { [Op.like]: `%${searchQuery}%` } }
+                        ]
+                    } : {})
+                },
+                include: [
+                    {
+                        model: User,
+                        attributes: ['id', 'name', 'email']
+                    },
+                    {
+                        model: OrderProduct,
+                        as: 'orderItems',
+                        include: [
+                            {
+                                model: Product,
+                                attributes: ['id', 'name', 'price', 'imageUrl']
+                            }
+                        ]
+                    },
+                    {
+                        model: DeliveryAddress,
+                        as: 'address',
+                        attributes: ['id', 'fullName', 'phoneNumber', 'street']
+                    },
+                    {
+                        model: OrderTracking,
+                        as: 'trackingSteps',
+                        attributes: ['status', 'timestamp'],
+                        separate: true,
+                        order: [['timestamp', 'ASC']]
+                    }
+                ],
+                order: [[sortBy, orderBy]],
+                limit, // Correctly pass the limit
+                offset // Correctly calculate the offset
+            });
+
+            // Store the result for each status and its pagination info
+            result[status] = {
+                orders,
+                pagination: {
+                    total: totalCount,
+                    page: parseInt(page),
+                    totalPages,
+                    itemsPerPage: limit
+                }
+            };
+        }
+
+        return res.status(200).json(result);
+
+    } catch (error) {
+        console.error('Error grouping orders for admin:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};

@@ -16,6 +16,7 @@ router.post("/place-order", productController.placeOrder);
 router.get("/orders/:userId", productController.getOrdersByUser);
 router.put('/orders/:orderId/status', productController.updateOrderStatus);
 router.get('/transactions/:status/:userId', productController.getTransactionsByUser);
+router.get('/admin/orders/processed', productController.getAdminGroupedOrders);
 
 // Product reviews
 router.post("/create-reviews", upload.array('images', 5), productController.addReview);
