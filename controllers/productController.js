@@ -588,12 +588,8 @@ exports.updateOrderStatus = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    if (status === 'cancelled' || status === 'completed') {
-    // Update order's main status field (optional if needed)
-        order.status = status.toLowerCase();
-        await order.save({ transaction });
-
-    }
+    order.status = status.toLowerCase();
+    await order.save({ transaction });
 
     // Log tracking entry
     await OrderTracking.create({
@@ -1231,7 +1227,7 @@ exports.removeFromWishlist = async (req, res) => {
 exports.getAdminGroupedOrders = async (req, res) => {
     try {
         const { searchQuery, itemsPerPage = 10, page = 1, sortBy = 'createdAt', orderBy = 'DESC' } = req.query;
-        const statuses = ['pending', 'delivered', 'completed'];
+        const statuses = ['pending', 'delivery', 'delivered', 'completed', 'cancelled'];
 
         // Prepare an object to hold grouped results
         const result = {};
@@ -1250,8 +1246,7 @@ exports.getAdminGroupedOrders = async (req, res) => {
                     status,
                     ...(searchQuery ? {
                         [Op.or]: [
-                            { 'name': { [Op.like]: `%${searchQuery}%` } },
-                            { 'email': { [Op.like]: `%${searchQuery}%` } }
+                            { 'id': { [Op.like]: `%${searchQuery}%` } }
                         ]
                     } : {})
                 },
@@ -1266,15 +1261,14 @@ exports.getAdminGroupedOrders = async (req, res) => {
                     status,
                     ...(searchQuery ? {
                         [Op.or]: [
-                            { 'name': { [Op.like]: `%${searchQuery}%` } },
-                            { 'email': { [Op.like]: `%${searchQuery}%` } }
+                            { 'id': { [Op.like]: `%${searchQuery}%` } }
                         ]
                     } : {})
                 },
                 include: [
                     {
                         model: User,
-                        attributes: ['id', 'name', 'email']
+                        attributes: ['id', 'name', 'email', 'coverImage']
                     },
                     {
                         model: OrderProduct,
@@ -1296,7 +1290,7 @@ exports.getAdminGroupedOrders = async (req, res) => {
                         as: 'trackingSteps',
                         attributes: ['status', 'timestamp'],
                         separate: true,
-                        order: [['timestamp', 'ASC']]
+                        order: [['timestamp', 'ASC']],
                     }
                 ],
                 order: [[sortBy, orderBy]],
