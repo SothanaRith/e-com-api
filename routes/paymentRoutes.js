@@ -10,6 +10,8 @@ router.post('/generate-deeplink', paymentController.generateDeeplink);
 // Route to check transaction status by MD5
 router.post('/check-transaction-md5', paymentController.checkTransactionStatus);
 
+router.post('/check-stream-transaction', paymentController.checkStreamTransactionStatus);
+
 router.post('/generate-khqr', khqrController.generateKHQR);
 
 // Route to verify a KHQRx

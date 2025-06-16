@@ -26,7 +26,7 @@ const generateKHQR = async (req, res) => {
 
         // Merchant Info Example (for business transactions)
         const merchantInfo = new MerchantInfo(
-            "sothanarith_heang1@aclb", // Merchant account ID
+            "sothanarith_heang2@aclb", // Merchant account ID
             "Sothanarith Heang",       // Merchant name
             "PHNOM PENH",             // City
             1243546472,               // Amount in cents (e.g., 1243546472 for 1243546472.00)
@@ -36,7 +36,7 @@ const generateKHQR = async (req, res) => {
 
         // Individual Info Example (for personal transactions)
         const individualInfo = new IndividualInfo(
-            "sothanarith_heang1@aclb",          // Individual account ID (e.g., phone number or email)
+            "sothanarith_heang2@aclb",          // Individual account ID (e.g., phone number or email)
             "Sothanarith Heang",               // Individual name
             "PHNOM PENH",             // City
             optionalData              // Optional data specific to the individual transaction
