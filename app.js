@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
 const sequelize = require('./config/db');
-
+const { BakongKHQR, khqrData, MerchantInfo, IndividualInfo } = require('bakong-khqr');
 // Routes
 const authRoutes = require('./routes/authRoutes');
 const chatRoutes = require('./routes/chatRoutes');
@@ -18,7 +18,8 @@ const adminRoute = require("./routes/adminRoute");
 const roleRoute = require("./routes/roleRoute");
 const permissionRoute = require("./routes/permissionRoute");
 const deliveryAddressRoutes = require("./routes/deliveryAddressRoutes");
-
+const adminNotification = require("./config/firebase_admin");
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const sampleCategories = require("./helpers/sampleCategories");
 const Category = require("./models/Category");
@@ -57,6 +58,36 @@ app.use("/api/role", roleRoute);
 app.use("/api/permission", permissionRoute);
 app.use("/api/delivery-addresses", deliveryAddressRoutes);
 app.use("/api/notification", notificationRoutes);
+app.use("/api", adminNotification);
+app.use('/api/payment', paymentRoutes);
+
+app.post('/generate-merchant-khqr', (req, res) => {
+  const { amount, referenceNumber, merchantId, merchantName } = req.body;
+
+  const optionalData = {
+    currency: khqrData.currency.khr,
+    amount: amount,
+    billNumber: referenceNumber,
+    storeLabel: "Devit Huotkeo",
+    terminalLabel: "Devit I",
+    expirationTimestamp: Date.now() + (1 * 60 * 1000),
+  };
+
+  const merchantInfo = new MerchantInfo(
+      merchantId,
+      merchantName,
+      "Battambang",
+      1243546472,
+      "DEVBKKHPXXX",
+      optionalData
+  );
+
+  const khqr = new BakongKHQR();
+  const response = khqr.generateMerchant(merchantInfo);
+
+  res.json({ qrCode: response });
+});
+
 
 // Sync database and start server
 sequelize.sync({ alter: true }).then(() => {
