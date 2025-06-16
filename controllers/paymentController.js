@@ -56,8 +56,7 @@ async function checkTransactionStatus(md5) {
                     getMoney = true;
                 }
             }
-
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
     } catch (error) {
         console.error('Error checking transaction status:', error.message);
@@ -89,7 +88,7 @@ async function checkStreamTransactionStatus (req, res) {
             // Simulating an API call to check transaction status
             const status = await axios.post('https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5', { md5 }, {
                 headers: {
-                    'Authorization': 'Bearer YOUR_ACCESS_TOKEN',
+                    'Authorization': ACCESS_TOKEN,
                     'Content-Type': 'application/json',
                 },
             });
