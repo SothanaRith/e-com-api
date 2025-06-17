@@ -316,7 +316,7 @@ exports.getProductById = async (req, res) => {
                 {
                     model: Product,
                     as: 'RelatedProducts',
-                    attributes: ['id', 'name', 'price', 'imageUrl'],
+                    attributes: ['id', 'name', 'price', 'imageUrl', 'totalStock'],
                     through: { attributes: [] }
                 },
                 ...(userId ? [{
@@ -386,9 +386,9 @@ exports.getProductById = async (req, res) => {
 };
 
 exports.placeOrder = async (req, res) => {
-    const { userId, items, paymentType, deliveryAddressId } = req.body;  // Added addressId
+    const { userId, items, paymentType, deliveryAddressId, billingNumber } = req.body;  // Added addressId
 
-    if (!userId || !items || !paymentType || !Array.isArray(items) || items.length === 0) {
+    if (!userId || !items || !paymentType || !Array.isArray(items) || items.length === 0 || !billingNumber || !deliveryAddressId) {
         return res.status(400).json({ message: "Missing or invalid required fields" });
     }
 
@@ -465,6 +465,7 @@ exports.placeOrder = async (req, res) => {
             paymentType,
             status: "pending",
             deliveryAddressId,  // Link the address to the order
+            billingNumber
         }, { transaction });
 
         await OrderTracking.create({
@@ -906,7 +907,7 @@ exports.searchProducts = async (req, res) => {
             products = await Product.findAll({
                 where: productWhere,
                 include: [
-                    { model: Category, attributes: ['id', 'name'] },
+                    { model: Category, attributes: ['id', 'name', 'imageUrl', 'totalStock'] },
                     ...(userId ? [{
                         model: Wishlist,
                         as: 'Wishlists',
@@ -1174,7 +1175,7 @@ exports.getWishlist = async (req, res) => {
                 {
                     model: Product,
                     as: 'product',
-                    attributes: ['id', 'name', 'price', 'imageUrl'],
+                    attributes: ['id', 'name', 'price', 'imageUrl', 'totalStock'],
                     include: [
                         {
                             model: Cart,

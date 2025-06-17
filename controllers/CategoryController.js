@@ -143,7 +143,7 @@ exports.getProductByCategory = async (req, res) => {
         {
           model: Product,
           as: 'RelatedProducts',
-          attributes: ['id', 'name'],
+          attributes: ['id', 'name', 'imageUrl', 'totalStock'],
           through: { attributes: [] }
         },
         ...(userId ? [{

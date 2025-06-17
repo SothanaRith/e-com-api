@@ -23,6 +23,10 @@ const Order = sequelize.define("Order", {
     type: DataTypes.ENUM('pending', 'in progress', 'delivery', 'delivered', 'cancelled', 'completed'),
     defaultValue: "pending",
   },
+  billingNumber: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
   deliveryAddressId: { // Foreign Key to DeliveryAddress
         type: DataTypes.INTEGER,
         allowNull: true,

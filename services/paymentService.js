@@ -8,18 +8,15 @@ const generateKHQR = async (req, res) => {
         const optionalData = {
             currency: req.body.currency === "khr" ? khqrData.currency.khr : khqrData.currency.usd,
             amount: req.body.amount ?? 100,
-            // AcquiringBank: "ABA Bank",// Example amount for transaction
-            // billNumber: "#0001",    // Example bill number
+            AcquiringBank: "ABA Bank",// Example amount for transaction
             mobileNumber: "85587575857", // Example mobile number
             storeLabel: "Snap buy", // Example store label
-            // terminalLabel: "process check",  // Example terminal label
             expirationTimestamp: Date.now() + (1 * 60 * 1000), // Example expiration in 1 minute
-            // merchantCategoryCode: "5999", // Default merchant category code
-            // PurposeOfTransaction: "process check",
-            // MerchantAlternateLanguagePreference: "km",
-            // MerchantNameAlternateLanguage: "ស្នេប បាយ",
-            // MerchantCityAlternateLanguage: "ភ្នំពញ"
-
+            merchantCategoryCode: "8220", // Default merchant category code"
+            payloadFormatIndicator: "01",
+            pointofInitiationMethod: "11",
+            countryCode: "KH",
+            merchantCity: "PHNOM PENH"
         };
 
         // Merchant Info Example (for business transactions)
