@@ -10,8 +10,7 @@ const sequelize = new Sequelize('e_com_db', 'root', '', {
 // Test connection
 (async () => {
   try {
-    // await sequelize.authenticate();
-
+    await sequelize.authenticate();
     console.log('MySQL database connected successfully!');
   } catch (error) {
     console.error('Unable to connect to the database:', error);
