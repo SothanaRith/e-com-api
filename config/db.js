@@ -1,16 +1,17 @@
 const { Sequelize } = require('sequelize');
 
-const sequelize = new Sequelize('node-api-ecom', 'root', '', {
+const sequelize = new Sequelize('e_com_db', 'root', '', {
   host: 'localhost', // Change this if your MySQL is hosted elsewhere
   dialect: 'mysql',
-  port: 8092,
+  port: 3306,
   logging: false, // Disable logging for cleaner output
 });
 
 // Test connection
 (async () => {
   try {
-    await sequelize.authenticate();
+    // await sequelize.authenticate();
+
     console.log('MySQL database connected successfully!');
   } catch (error) {
     console.error('Unable to connect to the database:', error);
