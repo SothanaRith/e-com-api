@@ -94,19 +94,6 @@ const decodeKHQR = async (req, res) => {
     }
 };
 
-// Generate Deeplink
-const deeplink = async (req, res) => {
-    const { qrCode } = req.body;
-    // Source Info is optional but if you include it
-    // all fields appIconUrl, appName, appDeepLinkCallback must not be null
-    const sourceInfo = new SourceInfo("https://bakong.nbc.gov.kh/images/logo.svg", "Bakong", "https://bakong.nbc.gov.kh");
-    const url = "https://bakong.page.link/rsD3qhQmJqwcfSqh7";
-
-    const deepLinkURL = BakongKHQR.generateDeepLink(url, qrCode, sourceInfo);
-
-    deepLinkURL.then(url => console.log(url))
-}
-
 const renewToken = async (req, res) => {
     try {
         const { email } = req.body;
@@ -160,6 +147,5 @@ module.exports = {
     generateKHQR,
     verifyKHQR,
     decodeKHQR,
-    deeplink,
-    renewToken// Added the checkTransactionStatus function here
+    renewToken
 };
