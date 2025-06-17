@@ -17,5 +17,5 @@ router.post('/verify', khqrController.verifyKHQR);
 // Route to decode a KHQR
 router.post('/decode', khqrController.decodeKHQR);
 router.post('/renew-token', khqrController.renewToken);
-
+router.get('/payment-callback', paymentController.handlePaymentCallback);
 module.exports = router;

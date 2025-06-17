@@ -35,7 +35,7 @@ async function checkStreamTransactionStatus (req, res) {
     const intervalTime = 1000; // Check every 1 second
 
     const checkStatus = async () => {
-        if (attempts >= 10) {  // Max attempts
+        if (attempts >= 3) {  // Max attempts
             clearInterval(checkInterval);
             res.write("data: {\"status\": \"Transaction timeout\"}\n\n");
             res.end();
@@ -72,6 +72,26 @@ async function checkStreamTransactionStatus (req, res) {
 
     checkInterval = setInterval(checkStatus, intervalTime);
 }
+async function handlePaymentCallback (req, res) {
+    const txnId = req.query.txn_id || 'unknown';
+    const deepLink = `snapbuy://payment-callback?txn_id=${txnId}`;
+
+    console.log(`🔁 Callback received: txn_id=${txnId}`);
+
+    res.send(`
+    <html>
+      <head>
+        <meta http-equiv="refresh" content="0; url='${deepLink}'" />
+      </head>
+      <body>
+        <p>Redirecting to your app...</p>
+        <script>
+          window.location.href = "${deepLink}";
+        </script>
+      </body>
+    </html>
+  `);
+}
 
 const generateDeepLinkKHQR = async (qrCode, appIconUrl, appName, appDeepLinkCallback) => {
     try {
@@ -80,7 +100,7 @@ const generateDeepLinkKHQR = async (qrCode, appIconUrl, appName, appDeepLinkCall
 
         // Prepare the payload for Bakong API's deeplink generation
         const deeplinkData = {
-            qr: qrCode,
+            qr: qrData,
             sourceInfo: {
                 appIconUrl: appIconUrl,
                 appName: appName,
@@ -91,7 +111,8 @@ const generateDeepLinkKHQR = async (qrCode, appIconUrl, appName, appDeepLinkCall
         // Call Bakong API for deeplink generation
         const response = await axios.post('https://api-bakong.nbc.gov.kh/v1/generate_deeplink_by_qr', deeplinkData, {
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': ACCESS_TOKEN,
             }
         });
 
@@ -108,4 +129,5 @@ const generateDeepLinkKHQR = async (qrCode, appIconUrl, appName, appDeepLinkCall
 module.exports = {
     generateDeeplink,
     checkStreamTransactionStatus,
+    handlePaymentCallback
 };

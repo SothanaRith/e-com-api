@@ -6,19 +6,20 @@ const generateKHQR = async (req, res) => {
     try {
         // Optional data for both individual and merchant information
         const optionalData = {
-            currency: khqrData.currency.khr,
-            amount: 100,
-            AcquiringBank: "ABA Bank",// Example amount for transaction
-            billNumber: "#0001",    // Example bill number
+            currency: req.body.currency === "khr" ? khqrData.currency.khr : khqrData.currency.usd,
+            amount: req.body.amount ?? 100,
+            // AcquiringBank: "ABA Bank",// Example amount for transaction
+            // billNumber: "#0001",    // Example bill number
             mobileNumber: "85587575857", // Example mobile number
-            storeLabel: "Devit Huotkeo", // Example store label
-            terminalLabel: "Devit I",  // Example terminal label
+            storeLabel: "Snap buy", // Example store label
+            // terminalLabel: "process check",  // Example terminal label
             expirationTimestamp: Date.now() + (1 * 60 * 1000), // Example expiration in 1 minute
-            merchantCategoryCode: "5999", // Default merchant category code
-            PurposeOfTransaction: "Buy coffee",
-            MerchantAlternateLanguagePreference: "km",
-            MerchantNameAlternateLanguage: "ចន ស្មីន",
-            MerchantCityAlternateLanguage: "ភ្នំពញ"
+            // merchantCategoryCode: "5999", // Default merchant category code
+            // PurposeOfTransaction: "process check",
+            // MerchantAlternateLanguagePreference: "km",
+            // MerchantNameAlternateLanguage: "ស្នេប បាយ",
+            // MerchantCityAlternateLanguage: "ភ្នំពញ"
+
         };
 
         // Merchant Info Example (for business transactions)
@@ -33,8 +34,8 @@ const generateKHQR = async (req, res) => {
 
         // Individual Info Example (for personal transactions)
         const individualInfo = new IndividualInfo(
-            "sothanarith_heang1@aclb",          // Individual account ID (e.g., phone number or email)
-            "Sothanarith Heang",               // Individual name
+            "un_virak2@aclb",          // Individual account ID (e.g., phone number or email)
+            "Virak Un",               // Individual name
             "PHNOM PENH",             // City
             optionalData              // Optional data specific to the individual transaction
         );
