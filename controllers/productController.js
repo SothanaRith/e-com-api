@@ -470,7 +470,7 @@ exports.placeOrder = async (req, res) => {
 
         await OrderTracking.create({
         orderId: order.id,
-        status: "Order Placed",
+        status: "pending",
         timestamp: new Date()
         }, { transaction });
         // Create OrderProducts and reduce stock
@@ -526,6 +526,42 @@ exports.placeOrder = async (req, res) => {
     }
 };
 
+exports.updateTransactionByOrderId = async (req, res) => {
+    const { orderId } = req.params;
+    const { status, paymentType, amount } = req.body;
+
+    const allowedStatuses = ['pending', 'success', 'failed', 'cancelled'];
+
+    if (status && !allowedStatuses.includes(status.toLowerCase())) {
+        return res.status(400).json({ message: 'Invalid status value' });
+    }
+
+    const transaction = await sequelize.transaction();
+
+    try {
+        const tx = await Transaction.findOne({ where: { orderId }, transaction });
+        if (!tx) {
+            await transaction.rollback();
+            return res.status(404).json({ message: 'Transaction not found for this order' });
+        }
+
+        if (status) tx.status = status.toLowerCase();
+        if (paymentType) tx.paymentType = paymentType;
+        if (amount) tx.amount = amount;
+
+        await tx.save({ transaction });
+
+        await transaction.commit();
+
+        return res.status(200).json({ message: 'Transaction updated successfully', transaction: tx });
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Error updating transaction:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
 exports.getTransactionsByUser = async (req, res) => {
     try {
         const { userId, status } = req.params;
@@ -570,6 +606,69 @@ exports.getTransactionsByUser = async (req, res) => {
     }
 };
 
+exports.getOrderDetailById = async (req, res) => {
+    const { orderId } = req.params;
+
+    try {
+        const order = await Order.findByPk(orderId, {
+            include: [
+                {
+                    model: User,
+                    attributes: ['id', 'name', 'email', 'phone', 'coverImage']
+                },
+                {
+                    model: OrderProduct,
+                    as: 'orderItems',
+                    include: [
+                        {
+                            model: Product,
+                            attributes: ['id', 'name', 'price', 'imageUrl', 'description']
+                        }
+                    ]
+                },
+                {
+                    model: DeliveryAddress,
+                    as: 'address'
+                },
+                {
+                    model: OrderTracking,
+                    as: 'trackingSteps',
+                    attributes: ['status', 'timestamp'],
+                    separate: true,
+                    order: [['timestamp', 'ASC']]
+                },
+                {
+                    model: Transaction,
+                    attributes: ['id', 'amount', 'status', 'paymentType']
+                }
+            ]
+        });
+
+        if (!order) {
+            return res.status(404).json({ message: "Order not found" });
+        }
+
+        // ✅ Dynamically calculate totalAmount
+        const totalAmount = order.orderItems.reduce((total, item) => {
+            const productPrice = parseFloat(item.Product?.price || 0);
+            const quantity = item.quantity || 0;
+            return total + productPrice * quantity;
+        }, 0);
+
+        // Append or override totalAmount
+        const orderWithTotal = {
+            ...order.toJSON(),
+            totalAmount: totalAmount.toFixed(2)
+        };
+
+        return res.status(200).json(orderWithTotal);
+
+    } catch (error) {
+        console.error('Error fetching order detail:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
 exports.updateOrderStatus = async (req, res) => {
   const { orderId } = req.params;
   const { status } = req.body;
@@ -609,7 +708,6 @@ exports.updateOrderStatus = async (req, res) => {
     return res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
-
 // Helper function
 function capitalizeWords(str) {
   return str.replace(/\b\w/g, char => char.toUpperCase());
@@ -1225,6 +1323,7 @@ exports.removeFromWishlist = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
+
 exports.getAdminGroupedOrders = async (req, res) => {
     try {
         const { searchQuery, itemsPerPage = 10, page = 1, sortBy = 'createdAt', orderBy = 'DESC' } = req.query;
@@ -1292,6 +1391,10 @@ exports.getAdminGroupedOrders = async (req, res) => {
                         attributes: ['status', 'timestamp'],
                         separate: true,
                         order: [['timestamp', 'ASC']],
+                    },
+                    {
+                        model: Transaction,
+                        attributes: ['id', 'amount', 'status', 'paymentType']
                     }
                 ],
                 order: [[sortBy, orderBy]],
