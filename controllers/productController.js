@@ -907,7 +907,7 @@ exports.searchProducts = async (req, res) => {
             products = await Product.findAll({
                 where: productWhere,
                 include: [
-                    { model: Category, attributes: ['id', 'name', 'imageUrl', 'totalStock'] },
+                    { model: Category, attributes: ['id', 'name'] },
                     ...(userId ? [{
                         model: Wishlist,
                         as: 'Wishlists',
