@@ -46,7 +46,6 @@ Product.hasMany(Review, {
 
 Product.hasMany(Wishlist, {
   foreignKey: 'productId',
-  as: 'Wishlists',
   onDelete: 'CASCADE'
 });
 
