@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const RoleController = require('../controllers/RoleController');
-const {isAdmin, isSuperAdmin} = require("../middleware/roleMiddleware");
-const {authenticateToken} = require("../middleware/authenticateToken");
+const RoleController = require('../controllers/roleController');
+
 // GET all roles
 router.get('/roles', RoleController.getAllRoles);
 
