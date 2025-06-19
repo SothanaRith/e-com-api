@@ -4,6 +4,7 @@ const Category = require("./Category");
 const Review = require("./Review");
 // const Variant = require("./VariantModel");
 const RelatedProduct = require("./RelatedProduct");
+const Wishlist = require("./WishList");
 
 const Product = sequelize.define("Product", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -41,6 +42,12 @@ Product.belongsTo(Category, {
 Product.hasMany(Review, {
   foreignKey: "productId",
   onDelete: "CASCADE"
+});
+
+Product.hasMany(Wishlist, {
+  foreignKey: 'productId',
+  as: 'Wishlists',
+  onDelete: 'CASCADE'
 });
 
 // Product.hasMany(Variant, {

@@ -1248,11 +1248,28 @@ exports.addToWishlist = async (req, res) => {
     try {
         const { userId, productId } = req.body;
 
-        const exists = await Wishlist.findOne({ where: { userId, productId } });
-        if (exists) return res.status(409).json({ message: 'Product already in wishlist' });
+        // ✅ Check if product exists
+        const product = await Product.findByPk(productId);
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
 
+        // ✅ Check if user exists (optional but good practice)
+        const user = await User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // ❌ Prevent duplicate wishlist entry
+        const exists = await Wishlist.findOne({ where: { userId, productId } });
+        if (exists) {
+            return res.status(409).json({ message: 'Product already in wishlist' });
+        }
+
+        // ✅ Create wishlist
         const wishlist = await Wishlist.create({ userId, productId });
         return res.status(201).json({ message: 'Added to wishlist', wishlist });
+
     } catch (error) {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
