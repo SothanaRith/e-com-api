@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const productController = require("../controllers/productController");
-const upload = require("../utils/fileUpload"); // File upload middleware
 const {allowRole, authenticateToken} = require("../middleware/authenticateToken");
+const upload = require('../middleware/s3Upload');
 // Core product operations
 router.get("/get-all/:userId", productController.getAllProducts);
 router.get("/get-product/:id/:userId", productController.getProductById);

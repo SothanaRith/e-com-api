@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {createCategory, getAllCategories, updateCategory, getProductByCategory} = require('../controllers/CategoryController');
-const upload = require("../utils/fileUpload");
+const upload = require('../middleware/s3Upload');
 
 // Define the route to get all users
 router.post("/create-category", upload.single("image"), createCategory);

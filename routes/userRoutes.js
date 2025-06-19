@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const { authenticateToken } = require('../middleware/authenticateToken'); // Assuming you put it in `authMiddleware.js`
-const upload = require("../utils/fileUpload"); // File upload middleware
-
+const upload = require('../middleware/s3Upload');
 // Define the route to get all users
 router.get('/getUsers',userController.getAllUsers);
 router.get('/getProfile/:id', userController.getProfileById);

@@ -33,9 +33,8 @@ exports.createProduct = async (req, res) => {
             relatedProductIds,
         } = req.body;
         let totalStock = 0;
-        
-        const imageArray = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
-        
+        const imageArray = req.files ? req.files.map(file => file.location) : [];
+
         if (!categoryId || !name) {
             return res.status(400).json({ message: "Category ID and Product Name are required" });
         }
@@ -868,11 +867,7 @@ exports.addReview = async (req, res) => {
     try {
         const { productId, userId, rating, comment } = req.body;
 
-        // Parse uploaded files if any
-        const imageArray = req.files && req.files.length > 0
-            ? req.files.map(file => `/uploads/${file.filename}`)
-            : null;
-
+        const imageArray = req.files ? req.files.map(file => file.location) : [];
         // Validate required fields
         if (!productId || !userId || !rating) {
             return res.status(400).json({ message: "productId, userId, and rating are required" });
