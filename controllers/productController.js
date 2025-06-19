@@ -1275,10 +1275,15 @@ exports.addToWishlist = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
-// Get wishlist for user
 exports.getWishlist = async (req, res) => {
     try {
         const { userId } = req.params;
+
+        // Optional: Validate user existence
+        const user = await User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
 
         const wishlist = await Wishlist.findAll({
             where: { userId },
@@ -1300,16 +1305,21 @@ exports.getWishlist = async (req, res) => {
         });
 
         const formatted = wishlist.map(item => {
-            const prod = item.product.toJSON();
+            const prod = item.product?.toJSON?.() || {};
 
-            // Parse imageUrl if needed
+            // Safely parse imageUrl
             if (typeof prod.imageUrl === 'string') {
-                try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
+                try {
+                    prod.imageUrl = JSON.parse(prod.imageUrl);
+                } catch {
+                    prod.imageUrl = [];
+                }
             }
 
-            // Include cart status
-            prod.isInCart = prod.Carts && prod.Carts.length > 0;
-            prod.cartQuantity = prod.isInCart ? prod.Carts[0].quantity : 0;
+            // Cart status
+            const carts = prod.Carts || [];
+            prod.isInCart = carts.length > 0;
+            prod.cartQuantity = prod.isInCart ? carts[0].quantity : 0;
             delete prod.Carts;
 
             return {
@@ -1324,6 +1334,7 @@ exports.getWishlist = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
+
 // Remove from wishlist
 exports.removeFromWishlist = async (req, res) => {
     try {
