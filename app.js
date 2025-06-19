@@ -47,7 +47,6 @@ app.use("/api/role", roleRoute);
 app.use("/api/permission", permissionRoute);
 app.use("/api/delivery-addresses", deliveryAddressRoutes);
 app.use("/api/notification", notificationRoutes);
-app.use("/api", adminNotification);
 app.use('/api/payment', paymentRoutes);
 
 // Sync database and start server
