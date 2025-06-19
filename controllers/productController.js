@@ -1290,6 +1290,7 @@ exports.getWishlist = async (req, res) => {
             include: [
                 {
                     model: Product,
+                    as: 'product',
                     attributes: ['id', 'name', 'price', 'imageUrl', 'totalStock'],
                     include: [
                         {

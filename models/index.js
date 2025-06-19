@@ -38,7 +38,7 @@ User.hasMany(Wishlist, { foreignKey: 'userId', as: 'Wishlists', onDelete: 'CASCA
 Wishlist.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 Product.hasMany(Wishlist, { foreignKey: 'productId', onDelete: 'CASCADE' });
-Wishlist.belongsTo(Product, { foreignKey: 'productId' });
+Wishlist.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
 
 // Shop associations
 User.hasMany(Shop, { foreignKey: 'vendorId', as: 'shops' });
