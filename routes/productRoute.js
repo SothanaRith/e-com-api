@@ -6,7 +6,7 @@ const upload = require('../middleware/s3Upload');
 // Core product operations
 router.get("/get-all/:userId", productController.getAllProducts);
 router.get("/get-product/:id/:userId", productController.getProductById);
-router.post("/create-product", authenticateToken, upload.array('images', 5), productController.createProduct);
+router.post("/create-product", upload.array('images', 5), productController.createProduct);
 router.post("/update-product/:productId", upload.array('images', 5), productController.updateProduct);
 router.delete("/delete/:productId", productController.deleteProduct);
 
