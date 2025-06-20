@@ -74,7 +74,7 @@ async function checkStreamTransactionStatus (req, res) {
 }
 async function handlePaymentCallback (req, res) {
     const txnId = req.query.txn_id || 'unknown';
-    const deepLink = `snapbuy://payment-callback?txn_id=${txnId}`;
+    const deepLink = `snapbuy://payment-callback`;
 
     console.log(`🔁 Callback received: txn_id=${txnId}`);
 
