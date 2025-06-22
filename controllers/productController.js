@@ -12,15 +12,11 @@ const Wishlist = require("../models/WishList");
 const Transaction = require("../models/Transaction")
 const DeliveryAddress = require("../models/DeliveryAddress");
 const OrderTracking = require("../models/OrderTracking");
-const path = require("path");
-const upload = require("../controllers/uploadController");
 const { Product } = require('../models');
 const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
-const jwt = require('jsonwebtoken');
-const { encrypt, decrypt, generateTokens } = require('../utils/crypto');
 const sequelize = require('../config/db');
 const { Sequelize } = require('sequelize');
-const JWT_SECRET = process.env.JWT_SECRET;
+const Notification = require('../models/Notification');
 
 exports.createProduct = async (req, res) => {
     try {
@@ -509,7 +505,7 @@ exports.updateTransactionByOrderId = async (req, res) => {
     const { orderId } = req.params;
     const { status, paymentType, amount } = req.body;
 
-    const allowedStatuses = ['pending', 'success', 'failed', 'cancelled'];
+    const allowedStatuses = ['pending', 'completed', 'failed', 'cancelled'];
 
     if (status && !allowedStatuses.includes(status.toLowerCase())) {
         return res.status(400).json({ message: 'Invalid status value' });
@@ -649,68 +645,80 @@ exports.getOrderDetailById = async (req, res) => {
 };
 
 exports.updateOrderStatus = async (req, res) => {
-  const { orderId } = req.params;
-  const { status } = req.body;
+    const { orderId } = req.params;
+    const { status } = req.body;
 
-  const allowedStatuses = ['pending', 'delivery', 'delivered', 'cancelled', 'completed'];
+    const allowedStatuses = ['pending', 'delivery', 'delivered', 'cancelled', 'completed'];
 
-  if (!allowedStatuses.includes(status.toLowerCase())) {
-    return res.status(400).json({ message: 'Invalid status value' });
-  }
-
-  const transaction = await sequelize.transaction();
-
-  try {
-    const order = await Order.findByPk(orderId, { transaction });
-    if (!order) {
-      await transaction.rollback();
-      return res.status(404).json({ message: 'Order not found' });
+    if (!allowedStatuses.includes(status.toLowerCase())) {
+        return res.status(400).json({ message: 'Invalid status value' });
     }
 
-    order.status = status.toLowerCase();
-    await order.save({ transaction });
+    const transaction = await sequelize.transaction();
 
-      if (status.toLowerCase() === 'cancelled') {
-          const orderItems = await OrderProduct.findAll({ where: { orderId }, transaction });
+    try {
+        const order = await Order.findByPk(orderId, {
+            include: [{ model: User, attributes: ['id', 'name'] }],
+            transaction
+        });
 
-          for (const item of orderItems) {
-              const product = await Product.findByPk(item.productId, { transaction });
-              if (product) {
-                  product.totalStock += item.quantity;
-                  await product.save({ transaction });
-              }
-          }
+        if (!order) {
+            await transaction.rollback();
+            return res.status(404).json({ message: 'Order not found' });
+        }
 
-          // Optional: cancel transaction too
-          const payment = await Transaction.findOne({ where: { orderId }, transaction });
-          if (payment) {
-              payment.status = 'cancelled';
-              await payment.save({ transaction });
-          }
-      }
+        order.status = status.toLowerCase();
+        await order.save({ transaction });
 
-    // Log tracking entry
-    await OrderTracking.create({
-      orderId: order.id,
-      status: capitalizeWords(status),
-      timestamp: new Date()
-    }, { transaction });
+        if (status.toLowerCase() === 'cancelled') {
+            const orderItems = await OrderProduct.findAll({ where: { orderId }, transaction });
 
-    await transaction.commit();
+            for (const item of orderItems) {
+                const product = await Product.findByPk(item.productId, { transaction });
+                if (product) {
+                    product.totalStock += item.quantity;
+                    await product.save({ transaction });
+                }
+            }
 
-    return res.status(200).json({ message: 'Order status updated successfully' });
+            const payment = await Transaction.findOne({ where: { orderId }, transaction });
+            if (payment) {
+                payment.status = 'cancelled';
+                await payment.save({ transaction });
+            }
+        }
 
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Error updating order status:', error);
-    return res.status(500).json({ message: 'Server error', error: error.message });
-  }
+        await OrderTracking.create({
+            orderId: order.id,
+            status: capitalizeWords(status),
+            timestamp: new Date()
+        }, { transaction });
+
+        // ✅ Create Notification for the user
+        await Notification.create({
+            userId: order.userId,
+            title: `Order #${order.id} Status Updated`,
+            body: `Your order status is now: ${capitalizeWords(status)}.`,
+            status: 'unread',
+            sentAt: new Date()
+        }, { transaction });
+
+        await transaction.commit();
+
+        return res.status(200).json({ message: 'Order status updated successfully' });
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Error updating order status:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
 };
-// Helper function
-function capitalizeWords(str) {
-  return str.replace(/\b\w/g, char => char.toUpperCase());
-}
 
+// Capitalize helper
+function capitalizeWords(str) {
+    return str.replace(/\b\w/g, char => char.toUpperCase());
+}
+// Helper function
 exports.cancelOrder = async (req, res) => {
     const { id } = req.params;
 
