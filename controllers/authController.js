@@ -191,15 +191,17 @@ exports.verifyOtp = async (req, res) => {
     user.passwordResetOtp = null;
     user.passwordResetExpires = null;
     user.isVerify = true;
-    await user.save();
+
     const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
+    user.hashedRefreshToken = hashedRefreshToken;
+
+    await user.save();
 
     return res.status(200).json({
       success: true,
       message: 'OTP verified successfully',
       accessToken,
       refreshToken,
-      hashedRefreshToken
     });
 
   } catch (error) {
@@ -220,7 +222,7 @@ exports.refreshToken = async (req, res) => {
   }
 
   try {
-    const rawRefreshToken = encryptedRefreshToken;
+    const rawRefreshToken = decrypt(encryptedRefreshToken);
 
     const user = await User.findOne({ where: { email } });
 
@@ -228,17 +230,20 @@ exports.refreshToken = async (req, res) => {
       return res.status(403).json({ message: 'Invalid token or user not found' });
     }
 
-    const isMatch = rawRefreshToken === user.hashedRefreshToken;
+    const isMatch = await bcrypt.compare(rawRefreshToken, user.hashedRefreshToken);
 
     if (!isMatch) {
       return res.status(403).json({ message: 'Invalid token' });
     }
 
-    const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
-
+    const newAccessToken = jwt.sign(
+        { id: user.id, role: user.role, tokenVersion: user.tokenVersion },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' }
+    );
 
     return res.json({
-      accessToken, refreshToken, hashedRefreshToken
+      accessToken: encrypt(newAccessToken)
     });
 
   } catch (err) {
@@ -398,4 +403,3 @@ exports.logout = async (req, res) => {
     });
   }
 };
-
