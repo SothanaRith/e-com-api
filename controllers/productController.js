@@ -386,7 +386,7 @@ exports.getProductById = async (req, res) => {
 };
 
 exports.placeOrder = async (req, res) => {
-    const { userId, items, paymentType, deliveryAddressId, billingNumber } = req.body;  // Added addressId
+    const { userId, items, paymentType, deliveryAddressId, billingNumber } = req.body;
 
     if (!userId || !items || !paymentType || !Array.isArray(items) || items.length === 0 || !billingNumber || !deliveryAddressId) {
         return res.status(400).json({ message: "Missing or invalid required fields" });
@@ -395,37 +395,25 @@ exports.placeOrder = async (req, res) => {
     const transaction = await sequelize.transaction();
 
     try {
-        // Fetch the user
+        // 1. Validate user
         const user = await User.findByPk(userId);
         if (!user) {
             await transaction.rollback();
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Fetch the address (either default or provided address)
-        let address;
-        if (deliveryAddressId) {
-            address = await DeliveryAddress.findByPk(deliveryAddressId);
-            if (!address) {
-                await transaction.rollback();
-                return res.status(404).json({ message: "Address not found" });
-            }
-        } else {
-            // If no addressId provided, get the default address
-            address = await DeliveryAddress.findOne({
-                where: { userId, isDefault: true },
-            });
-            if (!address) {
-                await transaction.rollback();
-                return res.status(404).json({ message: "Default address not found" });
-            }
+        // 2. Validate address
+        const address = await DeliveryAddress.findByPk(deliveryAddressId);
+        if (!address) {
+            await transaction.rollback();
+            return res.status(404).json({ message: "Address not found" });
         }
 
         let totalAmount = 0;
 
-        // Validate stock and calculate total amount
+        // 3. Validate stock and calculate total
         for (const item of items) {
-            const { productId, variantId, quantity } = item;
+            const { productId, quantity } = item;
 
             if (!productId || !quantity || quantity <= 0) {
                 throw new Error("Invalid item data");
@@ -434,76 +422,54 @@ exports.placeOrder = async (req, res) => {
             const product = await Product.findByPk(productId, { transaction });
             if (!product) throw new Error(`Product ID ${productId} not found`);
 
-            let stockAvailable;
-            let price;
-
-            if (variantId) {
-                const variant = await Variant.findOne({ where: { id: variantId, productId }, transaction });
-                if (!variant) throw new Error(`Variant not found for product ID ${productId}`);
-                stockAvailable = variant.stock;
-                price = variant.price;
-
-                if (quantity > stockAvailable) {
-                    throw new Error(`Insufficient stock for variant ${variant.sku}`);
-                }
-            } else {
-                stockAvailable = product.totalStock;
-                price = product.price;
-
-                if (quantity > stockAvailable) {
-                    throw new Error(`Insufficient stock for product ${product.name}`);
-                }
+            if (quantity > product.totalStock) {
+                throw new Error(`Insufficient stock for product ${product.name}`);
             }
 
-            totalAmount += price * quantity;
+            totalAmount += product.price * quantity;
         }
 
-        // Create Order and link to the address
+        // 4. Create order
         const order = await Order.create({
             userId,
             totalAmount,
             paymentType,
             status: "pending",
-            deliveryAddressId,  // Link the address to the order
+            deliveryAddressId,
             billingNumber
         }, { transaction });
 
         await OrderTracking.create({
-        orderId: order.id,
-        status: "pending",
-        timestamp: new Date()
+            orderId: order.id,
+            status: "pending",
+            timestamp: new Date()
         }, { transaction });
-        // Create OrderProducts and reduce stock
+
+        // 5. Create OrderProduct & decrement stock
         for (const item of items) {
-            const { productId, variantId, quantity } = item;
+            const { productId, quantity } = item;
 
-            let price;
+            const product = await Product.findByPk(productId, { transaction });
+            const price = product.price;
 
-            if (variantId) {
-                const variant = await Variant.findOne({ where: { id: variantId, productId }, transaction });
-                price = variant.price;
-                await variant.decrement("stock", { by: quantity, transaction });
-            } else {
-                const product = await Product.findByPk(productId, { transaction });
-                price = product.price;
-                await product.decrement("totalStock", { by: quantity, transaction });
-            }
+            await product.decrement("totalStock", { by: quantity, transaction });
 
             await OrderProduct.create({
                 orderId: order.id,
                 productId,
-                variantId: variantId || null,
+                variantId: null, // no variant anymore
                 quantity,
                 price,
             }, { transaction });
         }
 
+        // 6. Clear cart
         await Cart.destroy({
             where: { userId },
             transaction
         });
 
-        // Create Transaction record
+        // 7. Create transaction record
         await Transaction.create({
             orderId: order.id,
             paymentType,
@@ -511,14 +477,27 @@ exports.placeOrder = async (req, res) => {
             status: "pending",
         }, { transaction });
 
+        // 8. Get updated product stocks
+        const updatedProducts = await Product.findAll({
+            where: {
+                id: items.map(i => i.productId)
+            },
+            transaction
+        });
+
         await transaction.commit();
 
         return res.status(201).json({
             message: "Order placed successfully",
             orderId: order.id,
             totalAmount,
-            address: address,  // Return the address information in the response
+            address: address,
+            updatedStocks: updatedProducts.map(p => ({
+                productId: p.id,
+                totalStock: p.totalStock
+            }))
         });
+
     } catch (error) {
         await transaction.rollback();
         console.error("Error placing order:", error);
@@ -673,7 +652,7 @@ exports.updateOrderStatus = async (req, res) => {
   const { orderId } = req.params;
   const { status } = req.body;
 
-  const allowedStatuses = ['in progress', 'delivery', 'delivered', 'cancelled', 'completed'];
+  const allowedStatuses = ['pending', 'delivery', 'delivered', 'cancelled', 'completed'];
 
   if (!allowedStatuses.includes(status.toLowerCase())) {
     return res.status(400).json({ message: 'Invalid status value' });
@@ -690,6 +669,25 @@ exports.updateOrderStatus = async (req, res) => {
 
     order.status = status.toLowerCase();
     await order.save({ transaction });
+
+      if (status.toLowerCase() === 'cancelled') {
+          const orderItems = await OrderProduct.findAll({ where: { orderId }, transaction });
+
+          for (const item of orderItems) {
+              const product = await Product.findByPk(item.productId, { transaction });
+              if (product) {
+                  product.totalStock += item.quantity;
+                  await product.save({ transaction });
+              }
+          }
+
+          // Optional: cancel transaction too
+          const payment = await Transaction.findOne({ where: { orderId }, transaction });
+          if (payment) {
+              payment.status = 'cancelled';
+              await payment.save({ transaction });
+          }
+      }
 
     // Log tracking entry
     await OrderTracking.create({
@@ -1443,5 +1441,37 @@ exports.getAdminGroupedOrders = async (req, res) => {
     } catch (error) {
         console.error('Error grouping orders for admin:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.updateTotalStock = async (req, res) => {
+    const { productId } = req.params;
+
+    try {
+        // Check if product exists
+        const product = await Product.findByPk(productId);
+        if (!product) {
+            return res.status(404).json({ message: "Product not found" });
+        }
+
+        // Sum all variant stock for this product
+        const totalStockResult = await Variant.findAll({
+            where: { productId },
+            attributes: [[Sequelize.fn('SUM', Sequelize.col('stock')), 'totalStock']],
+            raw: true,
+        });
+
+        const totalStock = parseInt(totalStockResult[0].totalStock || 0, 10);
+
+        // Update product's totalStock field
+        await product.update({ totalStock });
+
+        return res.status(200).json({
+            message: "Total stock updated successfully",
+            totalStock,
+        });
+    } catch (error) {
+        console.error("Error updating total stock:", error);
+        return res.status(500).json({ message: "Server error", error: error.message });
     }
 };

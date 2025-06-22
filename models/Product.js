@@ -2,7 +2,7 @@ const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
 const Category = require("./Category");
 const Review = require("./Review");
-// const Variant = require("./VariantModel");
+const Variant = require("./VariantModel");
 const RelatedProduct = require("./RelatedProduct");
 const Wishlist = require("./WishList");
 
@@ -49,10 +49,10 @@ Product.hasMany(Wishlist, {
   onDelete: 'CASCADE'
 });
 
-// Product.hasMany(Variant, {
-//   foreignKey: "productId",
-//   onDelete: "CASCADE"
-// });
+Product.hasMany(Variant, {
+  foreignKey: "productId",
+  onDelete: "CASCADE"
+});
 
 Product.belongsToMany(Product, {
   as: 'RelatedProducts',

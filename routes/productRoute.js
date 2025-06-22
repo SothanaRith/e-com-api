@@ -9,6 +9,7 @@ router.get("/get-product/:id/:userId", productController.getProductById);
 router.post("/create-product", upload.array('images', 5), productController.createProduct);
 router.post("/update-product/:productId", upload.array('images', 5), productController.updateProduct);
 router.delete("/delete/:productId", productController.deleteProduct);
+router.patch('/:productId/update-stock', productController.updateTotalStock);
 
 // Product purchase & orders
 router.post("/buy/:userId", productController.buyProduct);
