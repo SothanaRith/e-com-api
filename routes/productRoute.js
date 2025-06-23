@@ -2,7 +2,8 @@ const express = require("express");
 const router = express.Router();
 const productController = require("../controllers/productController");
 const {allowRole, authenticateToken} = require("../middleware/authenticateToken");
-const upload = require('../middleware/s3Upload');
+const upload = process.env.NODE_ENV === 'production'
+    ? require('../middleware/s3Upload') : require('../utils/fileUpload');
 // Core product operations
 router.get("/get-all/:userId", productController.getAllProducts);
 router.get("/get-product/:id/:userId", productController.getProductById);
@@ -41,6 +42,13 @@ router.post("/cart/:userId/:productId/delete", productController.removeFromCart)
 router.post('/wishlist', productController.addToWishlist);
 router.get('/wishlist/:userId', productController.getWishlist);
 router.post('/wishlist/delete/:userId/:productId', productController.removeFromWishlist);
+
+router.get('/overview', productController.getOverviewStats)
+router.get('/sales-chart', productController.getSalesChart)
+router.get('/top-products', productController.getTopProducts)
+router.get('/recent-orders', productController.getRecentOrders)
+router.get('/recent-reviews', productController.getRecentReviews)
+router.get('/order-status-summary', productController.getOrderStatusSummary)
 
 module.exports = router;
 

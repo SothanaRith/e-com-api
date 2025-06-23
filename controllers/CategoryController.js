@@ -10,7 +10,15 @@ exports.createCategory = async (req, res) => {
       return res.status(400).json({ message: "Category name is required" });
     }
 
-    const imageUrl = req.file.location;
+    let imageUrl = '';
+
+    if (process.env.NODE_ENV === 'development') {
+      imageUrl = req.file
+          ? `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`
+          : null;
+    } else {
+      imageUrl = req.file.location;
+    }
     
     // Create new category
     const category = await Category.create({

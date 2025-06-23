@@ -13,7 +13,7 @@ const Transaction = require("../models/Transaction")
 const DeliveryAddress = require("../models/DeliveryAddress");
 const OrderTracking = require("../models/OrderTracking");
 const { Product } = require('../models');
-const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
+const { Op, fn, col, literal, where: sequelizeWhere } = require('sequelize');
 const sequelize = require('../config/db');
 const { Sequelize } = require('sequelize');
 const Notification = require('../models/Notification');
@@ -30,7 +30,12 @@ exports.createProduct = async (req, res) => {
             relatedProductIds,
         } = req.body;
         let totalStock = 0;
-        const imageArray = req.files ? req.files.map(file => file.location) : [];
+        let imageArray = [];
+        if(process.env.NODE_ENV === 'development') {
+            imageArray = req.files ? req.files.map(file => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`) : [];
+        } else {
+            imageArray = req.files ? req.files.map(file => file.location) : [];
+        }
 
         if (!categoryId || !name) {
             return res.status(400).json({ message: "Category ID and Product Name are required" });
@@ -874,7 +879,12 @@ exports.addReview = async (req, res) => {
     try {
         const { productId, userId, rating, comment } = req.body;
 
-        const imageArray = req.files ? req.files.map(file => file.location) : [];
+        let imageArray = [];
+        if(process.env.NODE_ENV === 'development') {
+            imageArray = req.files ? req.files.map(file => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`) : [];
+        } else {
+            imageArray = req.files ? req.files.map(file => file.location) : [];
+        }
         // Validate required fields
         if (!productId || !userId || !rating) {
             return res.status(400).json({ message: "productId, userId, and rating are required" });
@@ -1483,3 +1493,115 @@ exports.updateTotalStock = async (req, res) => {
         return res.status(500).json({ message: "Server error", error: error.message });
     }
 };
+
+exports.getOverviewStats = async (req, res) => {
+    try {
+        const [users, products, orders, revenue, carts, wishlistItems] = await Promise.all([
+            User.count(),
+            Product.count(),
+            Order.count(),
+            Transaction.sum('amount', { where: { status: 'completed' } }),
+            Cart.count({ distinct: true, col: 'userId' }),
+            Wishlist.count()
+        ])
+
+        res.json({ users, products, orders, revenue, carts, wishlistItems })
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ message: 'Server error', error: error.message })
+    }
+}
+
+exports.getSalesChart = async (req, res) => {
+    try {
+        const period = req.query.period || 'monthly'
+        const dateFormat = period === 'daily' ? '%Y-%m-%d' : '%Y-%m'
+
+        const salesData = await Order.findAll({
+            attributes: [
+                [fn('DATE_FORMAT', col('createdAt'), dateFormat), 'date'],
+                [fn('COUNT', col('id')), 'orders'],
+                [fn('SUM', col('totalAmount')), 'revenue']
+            ],
+            group: [literal(`DATE_FORMAT(createdAt, '${dateFormat}')`)],
+            order: [[literal('date'), 'ASC']]
+        })
+
+        res.json(salesData)
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ message: 'Server error', error: error.message })
+    }
+}
+
+exports.getTopProducts = async (req, res) => {
+    try {
+        const topProducts = await OrderProduct.findAll({
+            attributes: [
+                'productId',
+                [fn('SUM', col('quantity')), 'totalSold']
+            ],
+            include: [{ model: Product, attributes: ['name', 'price', 'imageUrl'] }],
+            group: ['productId', 'Product.id'],
+            order: [[literal('totalSold'), 'DESC']],
+            limit: 5
+        })
+
+        res.json(topProducts)
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ message: 'Server error', error: error.message })
+    }
+}
+
+exports.getRecentOrders = async (req, res) => {
+    try {
+        const orders = await Order.findAll({
+            include: [
+                { model: User, attributes: ['name', 'email'] },
+                { model: Transaction, attributes: ['amount', 'status'] }
+            ],
+            order: [['createdAt', 'DESC']],
+            limit: 10
+        })
+
+        res.json(orders)
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ message: 'Server error', error: error.message })
+    }
+}
+
+exports.getRecentReviews = async (req, res) => {
+    try {
+        const reviews = await Review.findAll({
+            include: [
+                { model: Product, attributes: ['name'] },
+                { model: User, attributes: ['name'] }
+            ],
+            order: [['createdAt', 'DESC']],
+            limit: 5
+        })
+
+        res.json(reviews)
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ message: 'Server error', error: error.message })
+    }
+}
+
+exports.getOrderStatusSummary = async (req, res) => {
+    try {
+        const statuses = ['pending', 'delivery', 'delivered', 'completed', 'cancelled']
+        const counts = {}
+
+        for (const status of statuses) {
+            counts[status] = await Order.count({ where: { status } })
+        }
+
+        res.json(counts)
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ message: 'Server error', error: error.message })
+    }
+}

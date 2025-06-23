@@ -48,8 +48,13 @@ exports.uploadFile = (req, res) => {
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
       }
+      let fileUrl = '';
 
-      const fileUrl = req.file.location;
+      if(process.env.NODE_ENV !== 'production') {
+        fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+      } else {
+        fileUrl = req.file.location;
+      }
       res.status(200).json({ success: true, fileUrl });
     });
   };

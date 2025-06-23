@@ -147,21 +147,37 @@ exports.updateProfile = async (req, res) => {
   try {
     const user = await User.findByPk(id);
 
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    if (process.env.NODE_ENV === 'development') {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+
+      // If user not found, return an error
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+      // Update user profile fields
+      await user.update({
+        coverImage: `${req.protocol}://${req.get("host")}/uploads/${file.filename}` || user.coverImage,
+      });
+    } else {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      // S3 URL
+      const s3Url = req.file.location;
+
+      // Update user's cover image
+      await user.update({
+        coverImage: s3Url || user.coverImage,
+      });
     }
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    // S3 URL
-    const s3Url = req.file.location;
-
-    // Update user's cover image
-    await user.update({
-      coverImage: s3Url || user.coverImage,
-    });
 
     // Generate new tokens
     const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
@@ -179,3 +195,4 @@ exports.updateProfile = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Error updating profile', error: error.message });
   }
 };
+
