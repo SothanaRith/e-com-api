@@ -238,14 +238,14 @@ exports.updateProduct = async (req, res) => {
             stock,
             imageUrl,
             relatedProductIds,
-            categoryId // add categoryId here
+            categoryId
         } = req.body;
-        
+
         const product = await Product.findByPk(productId);
         if (!product) {
             return res.status(404).json({ message: "Product not found" });
         }
-        
+
         // Update main product info including categoryId
         await product.update({
             name: name ?? product.name,
@@ -253,23 +253,37 @@ exports.updateProduct = async (req, res) => {
             price: price ?? product.price,
             stock: stock ?? product.stock,
             imageUrl: imageUrl ?? product.imageUrl,
-            categoryId: categoryId ?? product.categoryId, // update categoryId here
+            categoryId: categoryId ?? product.categoryId,
         });
-        
-        // Handle related products
-        if (relatedProductIds && Array.isArray(relatedProductIds)) {
-            // Remove existing related products
+
+        // Handle related products safely
+        let relatedIdsArray = [];
+
+        if (typeof relatedProductIds === 'string') {
+            relatedIdsArray = relatedProductIds
+                .replace(/[\[\]'"]+/g, '') // Remove brackets/quotes
+                .split(',')
+                .map(id => parseInt(id.trim(), 10))
+                .filter(id => !isNaN(id) && id !== product.id);
+        } else if (Array.isArray(relatedProductIds)) {
+            relatedIdsArray = relatedProductIds
+                .map(id => parseInt(id))
+                .filter(id => !isNaN(id) && id !== product.id);
+        }
+
+        if (relatedIdsArray.length > 0) {
+            // Clear existing links
             await product.setRelatedProducts([]);
-            
-            // Re-add new related products if any
+
+            // Find and attach valid related products
             const validRelatedProducts = await Product.findAll({
-                where: { id: relatedProductIds }
+                where: { id: relatedIdsArray }
             });
-            
+
             await product.addRelatedProducts(validRelatedProducts);
         }
-        
-        // Reload updated product including related products and category
+
+        // Reload updated product
         const updatedProduct = await Product.findByPk(productId, {
             include: [
                 {
@@ -283,27 +297,25 @@ exports.updateProduct = async (req, res) => {
                 }
             ]
         });
-        
+
         const prodJson = updatedProduct.toJSON();
-        
-        // Flatten category to categoryId
+
         prodJson.categoryId = prodJson.Category?.id || null;
         delete prodJson.Category;
-        
-        // Parse imageUrl if string
+
         if (typeof prodJson.imageUrl === 'string') {
             try {
                 prodJson.imageUrl = JSON.parse(prodJson.imageUrl);
             } catch {
-                // ignore parse errors
+                prodJson.imageUrl = [];
             }
         }
-        
+
         return res.status(200).json({
             message: "Product updated successfully",
             product: prodJson
         });
-        
+
     } catch (error) {
         console.error("Error updating product:", error);
         return res.status(500).json({ message: "Internal server error", error: error.message });
