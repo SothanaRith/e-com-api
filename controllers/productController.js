@@ -32,7 +32,7 @@ exports.createProduct = async (req, res) => {
         let totalStock = 0;
         let imageArray = [];
         if(process.env.NODE_ENV === 'development') {
-            imageArray = req.files ? req.files.map(file => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`) : [];
+            imageArray = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
         } else {
             imageArray = req.files ? req.files.map(file => file.location) : [];
         }
@@ -907,7 +907,7 @@ exports.addReview = async (req, res) => {
 
         let imageArray = [];
         if(process.env.NODE_ENV === 'development') {
-            imageArray = req.files ? req.files.map(file => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`) : [];
+            imageArray = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
         } else {
             imageArray = req.files ? req.files.map(file => file.location) : [];
         }

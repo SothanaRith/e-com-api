@@ -159,7 +159,7 @@ exports.updateProfile = async (req, res) => {
       }
       // Update user profile fields
       await user.update({
-        coverImage: `${req.protocol}://${req.get("host")}/uploads/${file.filename}` || user.coverImage,
+        coverImage: `/uploads/${file.filename}` || user.coverImage,
       });
     } else {
       if (!req.file) {

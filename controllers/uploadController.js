@@ -51,7 +51,7 @@ exports.uploadFile = (req, res) => {
       let fileUrl = '';
 
       if(process.env.NODE_ENV !== 'production') {
-        fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+        fileUrl = `/uploads/${req.file.filename}`;
       } else {
         fileUrl = req.file.location;
       }
