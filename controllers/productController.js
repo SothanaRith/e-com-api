@@ -12,7 +12,7 @@ const Wishlist = require("../models/WishList");
 const Transaction = require("../models/Transaction")
 const DeliveryAddress = require("../models/DeliveryAddress");
 const OrderTracking = require("../models/OrderTracking");
-const { Product } = require('../models');
+const Product = require("../models/Product");
 const { Op, fn, col, literal, where: sequelizeWhere } = require('sequelize');
 const sequelize = require('../config/db');
 const { Sequelize } = require('sequelize');
@@ -91,18 +91,32 @@ exports.createProduct = async (req, res) => {
 
         await Product.update({ totalStock }, { where: { id: product.id } });
 
-        if (relatedProductIds && Array.isArray(relatedProductIds)) {
-            for (const relatedId of relatedProductIds) {
-                const exists = await Product.findByPk(relatedId);
-                if (exists) {
-                    await RelatedProduct.create({
-                        productId: product.id,
-                        relatedProductId: relatedId
-                    });
-                }
+        let relatedIdsArray = [];
+
+        if (typeof relatedProductIds === 'string') {
+            // Remove potential brackets and quotes
+            relatedIdsArray = relatedProductIds
+                .replace(/[\[\]'"]+/g, '')        // Remove brackets and quotes
+                .split(',')
+                .map(id => parseInt(id.trim()))  // Convert to integers
+                .filter(id => !isNaN(id));       // Keep only valid numbers
+        } else if (Array.isArray(relatedProductIds)) {
+            relatedIdsArray = relatedProductIds.map(id => parseInt(id)).filter(id => !isNaN(id));
+        }
+
+// Now loop through safely
+        for (const relatedId of relatedIdsArray) {
+            const exists = await Product.findByPk(relatedId);
+            if (exists) {
+                await RelatedProduct.create({
+                    productId: product.id,
+                    relatedProductId: relatedId,
+                });
+            } else {
+                console.warn(`Product ID ${relatedId} not found`);
             }
         }
-        
+
         const updatedProduct = await Product.findByPk(product.id, {
             include: [
                 { model: Category, attributes: ["id"] },
