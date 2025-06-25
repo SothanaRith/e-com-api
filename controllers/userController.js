@@ -2,7 +2,7 @@ const { User } = require('../models');
 const jwt = require('jsonwebtoken');
 const { encrypt, decrypt, generateTokens } = require('../utils/crypto');
 const Blacklist = require("../models/Blacklist");
-
+const bcrypt = require('bcrypt');
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
@@ -112,7 +112,7 @@ exports.getProfile = async (req, res) => {
 
 exports.updateUserById = async (req, res) => {
   const { id } = req.params;  // Get user ID from request parameters
-  const { name, phone } = req.body;  // Extract fields to update from the request body
+  const { name, phone, email, password } = req.body;  // Extract fields to update from the request body
 
   try {
     // Find the user by their ID
@@ -123,17 +123,19 @@ exports.updateUserById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Update user fields
+    // Update user fields (only update email/password if present in the body)
     await user.update({
       name: name || user.name,
       phone: phone || user.phone,
+      email: email || user.email,
+      password: password ? await bcrypt.hash(password, parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12) : user.password,
     });
 
-            const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
+    // Generate new tokens (optional: update tokenVersion or hashedRefreshToken)
+    const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
     user.hashedRefreshToken = hashedRefreshToken;
 
-
-    // Respond with updated user data
+    // Respond with updated user data and new tokens
     return res.status(200).json({ success: true, message: 'User updated successfully', accessToken, refreshToken });
   } catch (error) {
     console.error('Error updating user:', error);

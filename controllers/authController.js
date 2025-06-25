@@ -191,6 +191,7 @@ exports.verifyOtp = async (req, res) => {
     user.passwordResetOtp = null;
     user.passwordResetExpires = null;
     user.isVerify = true;
+    user.status = "active"
 
     const { accessToken, refreshToken, hashedRefreshToken } = await generateTokens(user);
     user.hashedRefreshToken = hashedRefreshToken;
