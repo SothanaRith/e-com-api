@@ -94,6 +94,25 @@ exports.loadHome = async (req, res) => {
   }
 };
 
+exports.getAllSlides = async (req, res) => {
+    try {
+      const { activeOnly } = req.query
+
+      const whereCondition = activeOnly === 'true' ? { isActive: true } : {}
+
+      const slides = await Slide.findAll({
+        where: whereCondition,
+        order: [["order", "ASC"]],
+      })
+
+      return res.status(200).json(successResponse("Slides fetched successfully", slides))
+    } catch (error) {
+      console.error("Error fetching slides:", error)
+      
+      return res.status(500).json(failResponse("Internal server error", error.message))
+    }
+  }
+
 // Create Slide
 exports.createSlide = async (req, res) => {
   try {
