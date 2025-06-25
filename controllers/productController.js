@@ -238,7 +238,8 @@ exports.updateProduct = async (req, res) => {
             stock,
             imageUrl,
             relatedProductIds,
-            categoryId
+            categoryId,
+            variants,  // Added variants to be updated
         } = req.body;
 
         const product = await Product.findByPk(productId);
@@ -246,13 +247,28 @@ exports.updateProduct = async (req, res) => {
             return res.status(404).json({ message: "Product not found" });
         }
 
+        let imageArray = [];
+        if(process.env.NODE_ENV === 'development') {
+            imageArray = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
+        } else {
+            imageArray = req.files ? req.files.map(file => file.location) : [];
+        }
+
+        // Handle the incoming imageUrl string, if it exists
+        if (imageUrl) {
+            // Split the string into an array
+            const existingImages = imageUrl.split(',').map(image => image.trim());
+            imageArray = [...imageArray, ...existingImages]; // Add the existing images to the new imageArray
+        }
+
+        console.log(stock ?? product.stock)
         // Update main product info including categoryId
         await product.update({
             name: name ?? product.name,
             description: description ?? product.description,
             price: price ?? product.price,
-            stock: stock ?? product.stock,
-            imageUrl: imageUrl ?? product.imageUrl,
+            totalStock: stock ?? product.stock,
+            imageUrl: imageArray,
             categoryId: categoryId ?? product.categoryId,
         });
 
@@ -283,6 +299,38 @@ exports.updateProduct = async (req, res) => {
             await product.addRelatedProducts(validRelatedProducts);
         }
 
+        // Handle variants
+        if (variants && Array.isArray(variants)) {
+            for (const variantData of variants) {
+                const { id, sku, price, stock, attributes } = variantData;
+
+                let variant = await Variant.findOne({ where: { id, productId: product.id } });
+
+                if (variant) {
+                    // If variant exists, update it
+                    await variant.update({ sku, price, stock });
+                } else {
+                    // If variant doesn't exist, create a new one
+                    variant = await Variant.create({ productId: product.id, sku, price, stock });
+                }
+
+                // Handle variant attributes
+                if (attributes && Array.isArray(attributes)) {
+                    // Delete old attributes for the variant
+                    await VariantAttribute.destroy({ where: { variantId: variant.id } });
+
+                    // Add new attributes for the variant
+                    await Promise.all(attributes.map(attr =>
+                        VariantAttribute.create({
+                            variantId: variant.id,
+                            name: attr.name,
+                            value: attr.value,
+                        })
+                    ));
+                }
+            }
+        }
+
         // Reload updated product
         const updatedProduct = await Product.findByPk(productId, {
             include: [
@@ -291,9 +339,15 @@ exports.updateProduct = async (req, res) => {
                     attributes: ['id', 'name']
                 },
                 {
+                    model: Variant,
+                    attributes: ['id', 'productId', 'sku', 'price', 'stock'],
+                    include: { model: VariantAttribute, attributes: ['name', 'value'] }
+                },
+                {
                     model: Product,
                     as: 'RelatedProducts',
-                    attributes: ['id', 'name']
+                    attributes: ['id', 'name'],
+                    through: { attributes: [] }
                 }
             ]
         });
