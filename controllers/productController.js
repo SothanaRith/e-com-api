@@ -260,8 +260,6 @@ exports.updateProduct = async (req, res) => {
             const existingImages = imageUrl.split(',').map(image => image.trim());
             imageArray = [...imageArray, ...existingImages]; // Add the existing images to the new imageArray
         }
-
-        console.log(stock ?? product.stock)
         // Update main product info including categoryId
         await product.update({
             name: name ?? product.name,
