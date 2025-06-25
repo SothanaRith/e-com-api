@@ -32,11 +32,11 @@ const User = sequelize.define('Users', {
   
   password: { type: DataTypes.STRING, allowNull: false },
   phone: { type: DataTypes.STRING },
-  // role: {
-  //   type: DataTypes.ENUM("buyer", "seller", "vendor", "admin"),
-  //   allowNull: false,
-  //   defaultValue: "buyer"
-  // },
+  role: {
+    type: DataTypes.ENUM("buyer", "seller", "vendor", "admin"),
+    allowNull: false,
+    defaultValue: "buyer"
+  },
   
   roleId: {
     type: DataTypes.INTEGER,
