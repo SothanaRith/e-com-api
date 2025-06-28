@@ -5,7 +5,7 @@
   },
   "dependencies": {
     "argon2": "^0.41.1",
-    "aws-sdk": "^2.1692.0",
+    "aws-sdk": "^2.1536.0",
     "axios": "^1.10.0",
     "bakong-khqr": "^1.0.7",
     "bcrypt": "^5.1.1",
