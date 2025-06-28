@@ -112,7 +112,7 @@ exports.getProfile = async (req, res) => {
 
 exports.updateUserById = async (req, res) => {
   const { id } = req.params;  // Get user ID from request parameters
-  const { name, phone, email, password } = req.body;  // Extract fields to update from the request body
+  const { name, phone, email, password, role } = req.body;  // Extract fields to update from the request body
 
   try {
     // Find the user by their ID
@@ -128,6 +128,7 @@ exports.updateUserById = async (req, res) => {
       name: name || user.name,
       phone: phone || user.phone,
       email: email || user.email,
+      role: role || user.role,
       password: password ? await bcrypt.hash(password, parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12) : user.password,
     });
 
