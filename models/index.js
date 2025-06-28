@@ -15,6 +15,8 @@ const Slide = require('./Slide');
 const Transaction = require('./Transaction');
 const Role = require('./Role');
 const PermissionModel = require('./PermissionModel');
+const Notification = require('./Notification');
+const NotificationRead = require('./NotificationRead');
 
 User.belongsToMany(Role, {through: 'UserRoles', foreignKey: 'userId', otherKey: 'roleId', as: 'roles',});
 Role.belongsToMany(User, {through: 'UserRoles', foreignKey: 'roleId', otherKey: 'userId', as: 'users',});
@@ -86,6 +88,8 @@ OrderProduct.belongsTo(Variant, { foreignKey: 'variantId' });
 Order.hasOne(Transaction, { foreignKey: 'orderId' });
 Transaction.belongsTo(Order, { foreignKey: 'orderId' });
 
+NotificationRead.belongsTo(Notification, { foreignKey: 'notificationId' });
+
 module.exports = {
     sequelize,
     User,
@@ -103,5 +107,7 @@ module.exports = {
     Slide,
     Transaction,
     Role,
-    PermissionModel
+    PermissionModel,
+    Notification,
+    NotificationRead,
 };

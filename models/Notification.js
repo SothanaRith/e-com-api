@@ -4,7 +4,7 @@ const sequelize = require('../config/db'); // Your database configuration
 const Notification = sequelize.define('Notification', {
     userId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
     },
     title: {
         type: DataTypes.STRING,
