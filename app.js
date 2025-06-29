@@ -52,7 +52,7 @@ app.use('/api/payment', paymentRoutes);
 // Sync database and start server
 sequelize.sync({ alter: true }).then(() => {
   console.log('Database synced');
-  const PORT = 80;
+  const PORT = 3000;
   app.listen(PORT,'0.0.0.0', () => {
     console.log(`Server running on :${PORT}`);
   });
