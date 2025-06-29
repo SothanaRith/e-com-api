@@ -1,6 +1,6 @@
 const multer = require('multer');
 const multerS3 = require('multer-s3');
-const s3 = require('../utils/s3'); // now the v2 AWS SDK
+const s3 = require('../utils/s3');
 
 const upload = multer({
     storage: multerS3({
