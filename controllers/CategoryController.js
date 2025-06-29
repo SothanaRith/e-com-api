@@ -17,6 +17,7 @@ exports.createCategory = async (req, res) => {
           ? `/uploads/${req.file.filename}`
           : null;
     } else {
+      console.log(req.file)
       imageUrl = req.file.location;
     }
     
