@@ -19,6 +19,7 @@ router.get("/orders/:userId", productController.getOrdersByUser);
 router.post('/orders/:orderId/status', productController.updateOrderStatus);
 router.get('/transactions/:status/:userId', productController.getTransactionsByUser);
 router.get('/admin/orders/processed', productController.getAdminGroupedOrders);
+router.get('/orders/processed-by-user/:userId', productController.getOrdersByUserAndStatus);
 router.get('/orders/:orderId/detail', productController.getOrderDetailById);
 router.put('/transactions/by-order/:orderId/update', productController.updateTransactionByOrderId);
 
