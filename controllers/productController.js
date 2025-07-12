@@ -1258,9 +1258,9 @@ exports.deleteVariant = async (req, res) => {
 
 exports.addOrUpdateCart = async (req, res) => {
     try {
-        const { userId, productId, quantity } = req.body;
+        const { userId, productId, variantId, quantity } = req.body;
 
-        if (!userId || !productId || !quantity || quantity <= 0) {
+        if (!userId || !productId || !variantId || !quantity || quantity <= 0) {
             return res.status(400).json({ message: 'Invalid input' });
         }
 
@@ -1269,7 +1269,12 @@ exports.addOrUpdateCart = async (req, res) => {
             return res.status(404).json({ message: 'Product not found' });
         }
 
-        let cartItem = await Cart.findOne({ where: { userId, productId } });
+        const variant = await Variant.findOne({ where: { id: variantId, productId } });
+        if (!variant) {
+            return res.status(404).json({ message: 'Variant not found' });
+        }
+
+        let cartItem = await Cart.findOne({ where: { userId, productId, variantId } });
 
         if (cartItem) {
             cartItem.quantity = quantity;
@@ -1279,8 +1284,9 @@ exports.addOrUpdateCart = async (req, res) => {
             cartItem = await Cart.create({
                 userId,
                 productId,
+                variantId,
                 quantity,
-                priceAtPurchase: product.price
+                priceAtPurchase: variant.price,
             });
             return res.status(201).json({ message: 'Added to cart', cartItem });
         }
