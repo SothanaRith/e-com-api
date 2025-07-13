@@ -25,8 +25,6 @@ exports.createProduct = async (req, res) => {
             review,
             name,
             description,
-            price,
-            variants,
             relatedProductIds,
         } = req.body;
         let totalStock = 0;
@@ -50,9 +48,9 @@ exports.createProduct = async (req, res) => {
             categoryId,
             name,
             description,
-            price,
+            price: 0,
             imageUrl: imageArray,
-            totalStock: 0,
+            totalStock: totalStock,
         });
 
         if (review && review.rating && review.userId) {
@@ -67,44 +65,19 @@ exports.createProduct = async (req, res) => {
             }
         }
 
-        if (variants && Array.isArray(variants)) {
-            for (const variantData of variants) {
-                const { sku, price, stock, attributes } = variantData;
-                if (await Variant.findOne({ where: { sku } })) {
-                    return res.status(400).json({ error: `SKU '${sku}' already exists.` });
-                }
-
-                const variant = await Variant.create({ productId: product.id, sku, price, stock });
-                totalStock += stock;
-
-                if (attributes && Array.isArray(attributes)) {
-                    await Promise.all(attributes.map(attr =>
-                        VariantAttribute.create({
-                            variantId: variant.id,
-                            name: attr.name,
-                            value: attr.value,
-                        })
-                    ));
-                }
-            }
-        }
-
-        await Product.update({ totalStock }, { where: { id: product.id } });
-
+        // Related products handling
         let relatedIdsArray = [];
 
         if (typeof relatedProductIds === 'string') {
-            // Remove potential brackets and quotes
             relatedIdsArray = relatedProductIds
-                .replace(/[\[\]'"]+/g, '')        // Remove brackets and quotes
+                .replace(/[\[\]'"]+/g, '')
                 .split(',')
-                .map(id => parseInt(id.trim()))  // Convert to integers
-                .filter(id => !isNaN(id));       // Keep only valid numbers
+                .map(id => parseInt(id.trim()))
+                .filter(id => !isNaN(id));
         } else if (Array.isArray(relatedProductIds)) {
             relatedIdsArray = relatedProductIds.map(id => parseInt(id)).filter(id => !isNaN(id));
         }
 
-// Now loop through safely
         for (const relatedId of relatedIdsArray) {
             const exists = await Product.findByPk(relatedId);
             if (exists) {
@@ -120,26 +93,20 @@ exports.createProduct = async (req, res) => {
         const updatedProduct = await Product.findByPk(product.id, {
             include: [
                 { model: Category, attributes: ["id"] },
-                {
-                    model: Variant,
-                    attributes: ["id", "productId", "sku", "price", "stock"],
-                    include: { model: VariantAttribute, attributes: ["name", "value"] }
-                },
                 { model: Review, attributes: ["id", "rating", "comment", "userId"], required: false },
                 { model: Product, as: 'RelatedProducts', attributes: ['id'], through: { attributes: [] } },
             ]
         });
-        
+
         if (typeof updatedProduct.imageUrl === 'string') {
             updatedProduct.imageUrl = JSON.parse(updatedProduct.imageUrl);
         }
-        
+
         return res.status(201).json({
             message: "Product created successfully",
             updatedProduct
         });
-        
-        
+
     } catch (error) {
         console.error("Error creating product:", error);
         return res.status(500).json({ message: "Internal server error", error: error.message });
@@ -234,12 +201,9 @@ exports.updateProduct = async (req, res) => {
         const {
             name,
             description,
-            price,
-            stock,
             imageUrl,
             relatedProductIds,
             categoryId,
-            variants,  // Added variants to be updated
         } = req.body;
 
         const product = await Product.findByPk(productId);
@@ -248,48 +212,52 @@ exports.updateProduct = async (req, res) => {
         }
 
         let imageArray = [];
-        if(process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === 'development') {
             imageArray = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
         } else {
             imageArray = req.files ? req.files.map(file => file.location) : [];
         }
 
-        // Handle the incoming imageUrl string, if it exists
         if (imageUrl) {
-            // Split the string into an array
             const existingImages = imageUrl.split(',').map(image => image.trim());
-            imageArray = [...imageArray, ...existingImages]; // Add the existing images to the new imageArray
+            imageArray = [...imageArray, ...existingImages];
         }
-        // Update main product info including categoryId
+
+        // Fetch all variants of the product and calculate the total stock
+        const variants = await Variant.findAll({ where: { productId } });
+        let totalStock = 0;
+        variants.forEach(variant => {
+            totalStock += variant.stock;
+        });
+
+        // Update the product with the total stock from variants, or use the provided stock if given
         await product.update({
             name: name ?? product.name,
             description: description ?? product.description,
-            price: price ?? product.price,
-            totalStock: stock ?? product.stock,
+            price: product.price,
+            totalStock: totalStock,  // Update with calculated total stock or provided stock
             imageUrl: imageArray,
             categoryId: categoryId ?? product.categoryId,
         });
 
-        // Handle related products safely
+        // Related products handling
         let relatedIdsArray = [];
 
         if (typeof relatedProductIds === 'string') {
             relatedIdsArray = relatedProductIds
-                .replace(/[\[\]'"]+/g, '') // Remove brackets/quotes
+                .replace(/[\[\]'"]+/g, '')
                 .split(',')
-                .map(id => parseInt(id.trim(), 10))
-                .filter(id => !isNaN(id) && id !== product.id);
+                .map(id => parseInt(id.trim()))
+                .filter(id => !isNaN(id));
         } else if (Array.isArray(relatedProductIds)) {
             relatedIdsArray = relatedProductIds
                 .map(id => parseInt(id))
-                .filter(id => !isNaN(id) && id !== product.id);
+                .filter(id => !isNaN(id));
         }
 
         if (relatedIdsArray.length > 0) {
-            // Clear existing links
             await product.setRelatedProducts([]);
 
-            // Find and attach valid related products
             const validRelatedProducts = await Product.findAll({
                 where: { id: relatedIdsArray }
             });
@@ -297,56 +265,10 @@ exports.updateProduct = async (req, res) => {
             await product.addRelatedProducts(validRelatedProducts);
         }
 
-        // Handle variants
-        if (variants && Array.isArray(variants)) {
-            for (const variantData of variants) {
-                const { id, sku, price, stock, attributes } = variantData;
-
-                let variant = await Variant.findOne({ where: { id, productId: product.id } });
-
-                if (variant) {
-                    // If variant exists, update it
-                    await variant.update({ sku, price, stock });
-                } else {
-                    // If variant doesn't exist, create a new one
-                    variant = await Variant.create({ productId: product.id, sku, price, stock });
-                }
-
-                // Handle variant attributes
-                if (attributes && Array.isArray(attributes)) {
-                    // Delete old attributes for the variant
-                    await VariantAttribute.destroy({ where: { variantId: variant.id } });
-
-                    // Add new attributes for the variant
-                    await Promise.all(attributes.map(attr =>
-                        VariantAttribute.create({
-                            variantId: variant.id,
-                            name: attr.name,
-                            value: attr.value,
-                        })
-                    ));
-                }
-            }
-        }
-
-        // Reload updated product
         const updatedProduct = await Product.findByPk(productId, {
             include: [
-                {
-                    model: Category,
-                    attributes: ['id', 'name']
-                },
-                {
-                    model: Variant,
-                    attributes: ['id', 'productId', 'sku', 'price', 'stock'],
-                    include: { model: VariantAttribute, attributes: ['name', 'value'] }
-                },
-                {
-                    model: Product,
-                    as: 'RelatedProducts',
-                    attributes: ['id', 'name'],
-                    through: { attributes: [] }
-                }
+                { model: Category, attributes: ['id', 'name'] },
+                { model: Product, as: 'RelatedProducts', attributes: ['id', 'name'], through: { attributes: [] } }
             ]
         });
 
@@ -1206,8 +1128,18 @@ exports.addVariant = async (req, res) => {
     try {
         const { productId } = req.params;
         const { sku, price, stock, attributes } = req.body;
+        let imageUrl = '';
 
-        const variant = await Variant.create({ productId, sku, price, stock });
+        if (process.env.NODE_ENV === 'development') {
+            imageUrl = req.file
+                ? `/uploads/${req.file.filename}`
+                : null;
+        } else {
+            console.log(req.file)
+            imageUrl = req.file.location;
+        }
+
+        const variant = await Variant.create({ productId, sku, price, stock, imageUrl }); // <-- Add imageUrl
 
         if (attributes && Array.isArray(attributes)) {
             for (const attr of attributes) {
@@ -1228,12 +1160,38 @@ exports.addVariant = async (req, res) => {
 exports.updateVariant = async (req, res) => {
     try {
         const { variantId } = req.params;
-        const { sku, price, stock } = req.body;
+        const { sku, price, stock, attributes } = req.body;  // <-- Include attributes in the body
+        let imageUrl = '';
+
+        if (process.env.NODE_ENV === 'development') {
+            imageUrl = req.file
+                ? `/uploads/${req.file.filename}`
+                : null;
+        } else {
+            console.log(req.file)
+            imageUrl = req.file.location;
+        }
 
         const variant = await Variant.findByPk(variantId);
         if (!variant) return res.status(404).json({ message: 'Variant not found' });
 
-        await variant.update({ sku, price, stock });
+        // Update the variant
+        await variant.update({ sku, price, stock, imageUrl }); // <-- Update imageUrl
+
+        // Remove existing attributes before adding the new ones
+        await VariantAttribute.destroy({ where: { variantId: variant.id } });
+
+        // Add new attributes
+        if (attributes && Array.isArray(attributes)) {
+            for (const attr of attributes) {
+                await VariantAttribute.create({
+                    variantId: variant.id,
+                    name: attr.name,
+                    value: attr.value
+                });
+            }
+        }
+
         return res.status(200).json({ message: 'Variant updated', variant });
     } catch (error) {
         return res.status(500).json({ message: 'Server error', error: error.message });

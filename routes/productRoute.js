@@ -31,8 +31,8 @@ router.get("/product/:id/reviews", productController.getProductReviews);
 router.get("/search/:userId", productController.searchProducts);
 
 // Variant operations
-router.post("/variant/:productId/add", productController.addVariant);
-router.post("/variant/:variantId/update", productController.updateVariant);
+router.post("/variant/:productId/add", upload.single("image"), productController.addVariant);
+router.post("/variant/:variantId/update", upload.single("image"), productController.updateVariant);
 router.post("/variant/:variantId/delete", productController.deleteVariant);
 
 // Cart operations

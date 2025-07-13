@@ -13,6 +13,7 @@ const Variant = sequelize.define("Variant", {
     sku: { type: DataTypes.STRING, allowNull: false },
     price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
     stock: { type: DataTypes.INTEGER, defaultValue: 0 },
+    imageUrl: { type: DataTypes.TEXT },
 }, {
     timestamps: true,
     indexes: [
