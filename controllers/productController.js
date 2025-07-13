@@ -302,7 +302,7 @@ exports.getProductById = async (req, res) => {
 
         const product = await Product.findByPk(id, {
             include: [
-                { model: Category, attributes: ['id', 'name'] },
+                { model: Category, attributes: { exclude: [] } },
                 {
                     model: Variant,
                     attributes: ['id', 'productId', 'sku', 'price', 'stock'],
@@ -340,7 +340,7 @@ exports.getProductById = async (req, res) => {
 
         const prod = product.toJSON();
 
-        prod.categoryId = prod.Category?.id || null;
+        prod.category = prod.Category || null;
         delete prod.Category;
 
         // Parse imageUrl of main product
@@ -1222,6 +1222,53 @@ exports.deleteVariant = async (req, res) => {
 
         return res.status(200).json({ message: 'Variant deleted' });
     } catch (error) {
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.getVariantsByProductId = async (req, res) => {
+    try {
+        const { productId } = req.params;
+
+        const product = await Product.findByPk(productId);
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+
+        const variants = await Variant.findAll({
+            where: { productId },
+            include: [
+                {
+                    model: VariantAttribute,
+                    attributes: ['name', 'value']
+                }
+            ],
+            order: [['id', 'ASC']]
+        });
+
+        return res.status(200).json({ variants });
+    } catch (error) {
+        console.error('Error fetching variants:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+exports.getTotalItemsInCart = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // Find all items in the cart for the given user
+        const cartItems = await Cart.findAll({
+            where: { userId },
+            attributes: ['quantity'],
+        });
+
+        // Calculate the total quantity of items in the cart
+        const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
+
+        return res.status(200).json({ totalItems });
+    } catch (error) {
+        console.error('Error fetching total items in cart:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };

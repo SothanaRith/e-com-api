@@ -34,8 +34,10 @@ router.get("/search/:userId", productController.searchProducts);
 router.post("/variant/:productId/add", upload.single("image"), productController.addVariant);
 router.post("/variant/:variantId/update", upload.single("image"), productController.updateVariant);
 router.post("/variant/:variantId/delete", productController.deleteVariant);
+router.get('/products/:productId/variants', productController.getVariantsByProductId);
 
 // Cart operations
+router.get('/cart/total-items/:userId', productController.getTotalItemsInCart);
 router.post("/cart/add", productController.addOrUpdateCart);
 router.get("/cart/:userId", productController.getCart);
 router.post("/cart/:userId/:productId/delete", productController.removeFromCart);
