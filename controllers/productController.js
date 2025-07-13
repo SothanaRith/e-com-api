@@ -1131,15 +1131,12 @@ exports.addVariant = async (req, res) => {
         let imageUrl = '';
 
         if (process.env.NODE_ENV === 'development') {
-            imageUrl = req.file
-                ? `/uploads/${req.file.filename}`
-                : null;
+            imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
         } else {
-            console.log(req.file)
-            imageUrl = req.file.location;
+            imageUrl = req.file?.location;
         }
 
-        const variant = await Variant.create({ productId, sku, price, stock, imageUrl }); // <-- Add imageUrl
+        const variant = await Variant.create({ productId, sku, price, stock, imageUrl });
 
         if (attributes && Array.isArray(attributes)) {
             for (const attr of attributes) {
@@ -1148,6 +1145,15 @@ exports.addVariant = async (req, res) => {
                     name: attr.name,
                     value: attr.value
                 });
+            }
+        }
+
+        // 🟢 Check if this is the first variant and update product price
+        const variants = await Variant.findAll({ where: { productId }, order: [['id', 'ASC']] });
+        if (variants.length === 1) {
+            const product = await Product.findByPk(productId);
+            if (product) {
+                await product.update({ price: variants[0].price });
             }
         }
 
@@ -1160,28 +1166,22 @@ exports.addVariant = async (req, res) => {
 exports.updateVariant = async (req, res) => {
     try {
         const { variantId } = req.params;
-        const { sku, price, stock, attributes } = req.body;  // <-- Include attributes in the body
+        const { sku, price, stock, attributes } = req.body;
         let imageUrl = '';
 
         if (process.env.NODE_ENV === 'development') {
-            imageUrl = req.file
-                ? `/uploads/${req.file.filename}`
-                : null;
+            imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
         } else {
-            console.log(req.file)
-            imageUrl = req.file.location;
+            imageUrl = req.file?.location;
         }
 
         const variant = await Variant.findByPk(variantId);
         if (!variant) return res.status(404).json({ message: 'Variant not found' });
 
-        // Update the variant
-        await variant.update({ sku, price, stock, imageUrl }); // <-- Update imageUrl
+        await variant.update({ sku, price, stock, imageUrl });
 
-        // Remove existing attributes before adding the new ones
-        await VariantAttribute.destroy({ where: { variantId: variant.id } });
+        await VariantAttribute.destroy({ where: { variantId } });
 
-        // Add new attributes
         if (attributes && Array.isArray(attributes)) {
             for (const attr of attributes) {
                 await VariantAttribute.create({
@@ -1189,6 +1189,18 @@ exports.updateVariant = async (req, res) => {
                     name: attr.name,
                     value: attr.value
                 });
+            }
+        }
+
+        // 🟢 Update product price if this variant is the first one
+        const variants = await Variant.findAll({
+            where: { productId: variant.productId },
+            order: [['id', 'ASC']]
+        });
+        if (variants.length > 0 && variants[0].id === variant.id) {
+            const product = await Product.findByPk(variant.productId);
+            if (product) {
+                await product.update({ price: variant.price });
             }
         }
 
