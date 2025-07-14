@@ -306,7 +306,7 @@ exports.getProductById = async (req, res) => {
                 { model: Category, attributes: { exclude: [] } },
                 {
                     model: Variant,
-                    attributes: ['id', 'productId', 'sku', 'price', 'stock'],
+                    attributes: ['id', 'productId', 'sku', 'price', 'stock', 'imageUrl'],
                     include: [{ model: VariantAttribute, attributes: ['name', 'value'] }]
                 },
                 {
