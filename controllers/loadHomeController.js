@@ -19,6 +19,7 @@ exports.loadHome = async (req, res) => {
       offset,
       order: [["createdAt", "DESC"]],
       include: [
+        { model: Category, attributes: {exclude: []} },
         ...(userId ? [{
           model: Wishlist,
           as: 'Wishlists',
@@ -47,6 +48,8 @@ exports.loadHome = async (req, res) => {
       // Set isInWishlist
       prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
       delete prod.Wishlists;
+
+      prod.category = prod.Category || null;
 
       // Set cart info
       if (userId) {

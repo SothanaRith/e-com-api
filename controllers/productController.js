@@ -128,7 +128,7 @@ exports.getAllProducts = async (req, res) => {
 
         const products = await Product.findAll({
             include: [
-                { model: Category, attributes: ['id', 'name'] },
+                { model: Category, attributes: {exclude: []} },
                 ...(userId ? [{
                     model: Wishlist,
                     as: 'Wishlists',
@@ -153,6 +153,7 @@ exports.getAllProducts = async (req, res) => {
 
             // Flatten category
             prod.categoryId = prod.Category?.id || null;
+            prod.category = prod.Category || null;
             delete prod.Category;
 
             // Parse imageUrl if needed
@@ -972,7 +973,7 @@ exports.searchProducts = async (req, res) => {
 
         // Base includes for all queries, includes Cart if userId provided
         const includeModels = [
-            { model: Category, attributes: ['id', 'name'] },
+            { model: Category, attributes: {exclude: []} },
             ...(userId ? [{
                 model: Wishlist,
                 as: 'Wishlists',
@@ -1081,6 +1082,7 @@ exports.searchProducts = async (req, res) => {
             const prod = product.toJSON();
 
             prod.categoryId = prod.Category?.id || null;
+            prod.category = prod.Category || null;
             delete prod.Category;
 
             if (typeof prod.imageUrl === 'string') {
@@ -1392,6 +1394,7 @@ exports.addToWishlist = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
+
 exports.getWishlist = async (req, res) => {
     try {
         const { userId } = req.params;
@@ -1410,6 +1413,7 @@ exports.getWishlist = async (req, res) => {
                     as: 'product',
                     attributes: ['id', 'name', 'price', 'imageUrl', 'totalStock'],
                     include: [
+                        { model: Category, attributes: {exclude: []} },
                         {
                             model: Cart,
                             where: { userId },
@@ -1436,6 +1440,7 @@ exports.getWishlist = async (req, res) => {
             // Cart status
             const carts = prod.Carts || [];
             prod.isInCart = carts.length > 0;
+            prod.category = prod.Category || null;
             prod.cartQuantity = prod.isInCart ? carts[0].quantity : 0;
             delete prod.Carts;
 
