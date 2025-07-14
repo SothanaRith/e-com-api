@@ -306,7 +306,7 @@ exports.getProductById = async (req, res) => {
                 { model: Category, attributes: { exclude: [] } },
                 {
                     model: Variant,
-                    attributes: ['id', 'productId', 'sku', 'price', 'stock', 'imageUrl'],
+                    attributes: ['id', 'productId', 'sku', 'price', 'title', 'stock', 'imageUrl'],
                     include: [{ model: VariantAttribute, attributes: ['name', 'value'] }]
                 },
                 {
@@ -1129,7 +1129,16 @@ exports.searchProducts = async (req, res) => {
 exports.addVariant = async (req, res) => {
     try {
         const { productId } = req.params;
-        const { sku, price, stock, attributes } = req.body;
+
+        const { sku, price, stock, title } = req.body;
+        let attributes = [];
+
+        try {
+            attributes = JSON.parse(req.body.attributes || '[]');
+        } catch (e) {
+            console.error('Invalid JSON in attributes:', e.message);
+        }
+
         let imageUrl = '';
 
         if (process.env.NODE_ENV === 'development') {
@@ -1138,7 +1147,7 @@ exports.addVariant = async (req, res) => {
             imageUrl = req.file?.location;
         }
 
-        const variant = await Variant.create({ productId, sku, price, stock, imageUrl });
+        const variant = await Variant.create({ productId, sku, price, stock, imageUrl, title });
 
         if (attributes && Array.isArray(attributes)) {
             for (const attr of attributes) {
@@ -1168,7 +1177,16 @@ exports.addVariant = async (req, res) => {
 exports.updateVariant = async (req, res) => {
     try {
         const { variantId } = req.params;
-        const { sku, price, stock, attributes } = req.body;
+
+        const { sku, price, stock, title } = req.body;
+        let attributes = [];
+
+        try {
+            attributes = JSON.parse(req.body.attributes || '[]');
+        } catch (e) {
+            console.error('Invalid JSON in attributes:', e.message);
+        }
+
         let imageUrl = '';
 
         if (process.env.NODE_ENV === 'development') {
@@ -1180,11 +1198,12 @@ exports.updateVariant = async (req, res) => {
         const variant = await Variant.findByPk(variantId);
         if (!variant) return res.status(404).json({ message: 'Variant not found' });
 
-        await variant.update({ sku, price, stock, imageUrl });
+        await variant.update({ sku, price, stock, imageUrl, title });
 
-        await VariantAttribute.destroy({ where: { variantId } });
+        console.log(attributes)
 
         if (attributes && Array.isArray(attributes)) {
+            await VariantAttribute.destroy({ where: { variantId } });
             for (const attr of attributes) {
                 await VariantAttribute.create({
                     variantId: variant.id,

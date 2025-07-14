@@ -10,6 +10,7 @@ const Variant = sequelize.define("Variant", {
         allowNull: false,
         references: { model: "Products", key: "id" },
     },
+    title: { type: DataTypes.STRING },
     sku: { type: DataTypes.STRING, allowNull: false },
     price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
     stock: { type: DataTypes.INTEGER, defaultValue: 0 },
