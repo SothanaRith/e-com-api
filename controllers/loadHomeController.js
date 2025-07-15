@@ -77,6 +77,57 @@ exports.loadHome = async (req, res) => {
       });
     }
 
+    // Fetch latest 10 products by createdAt
+    const latestProductsRaw = await Product.findAll({
+      limit: 10,
+      order: [["createdAt", "DESC"]],
+      include: [
+        { model: Category, attributes: { exclude: [] } },
+        ...(userId ? [{
+          model: Wishlist,
+          as: 'Wishlists',
+          attributes: ['id'],
+          where: { userId },
+          required: false,
+        }] : []),
+        ...(userId ? [{
+          model: Cart,
+          where: { userId },
+          attributes: ['quantity'],
+          required: false,
+        }] : [])
+      ]
+    });
+
+    const latestProducts = latestProductsRaw.map(product => {
+      const prod = product.toJSON();
+
+      // Parse imageUrl
+      if (typeof prod.imageUrl === 'string') {
+        try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
+      }
+
+      // Wishlist info
+      prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
+      delete prod.Wishlists;
+
+      prod.category = prod.Category || null;
+
+      // Cart info
+      if (userId) {
+        if (prod.Carts && prod.Carts.length > 0) {
+          prod.isInCart = true;
+          prod.cartQuantity = prod.Carts[0].quantity;
+        } else {
+          prod.isInCart = false;
+          prod.cartQuantity = 0;
+        }
+        delete prod.Carts;
+      }
+
+      return prod;
+    });
+
     // Fetch active slides
     const slides = await Slide.findAll({ where: { isActive: true }, order: [["order", "ASC"]] });
 
@@ -86,6 +137,7 @@ exports.loadHome = async (req, res) => {
       products: processedProducts,
       unreadNotificationsCount,
       slides, // Include slides in the response
+      latestProducts,
       pagination: {
         currentPage: page,
         pageSize: size,
