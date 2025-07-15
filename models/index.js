@@ -17,6 +17,7 @@ const Role = require('./Role');
 const PermissionModel = require('./PermissionModel');
 const Notification = require('./Notification');
 const NotificationRead = require('./NotificationRead');
+const Poster = require('./Poster');
 
 User.belongsToMany(Role, {through: 'UserRoles', foreignKey: 'userId', otherKey: 'roleId', as: 'roles',});
 Role.belongsToMany(User, {through: 'UserRoles', foreignKey: 'roleId', otherKey: 'userId', as: 'users',});
@@ -110,4 +111,5 @@ module.exports = {
     PermissionModel,
     Notification,
     NotificationRead,
+    Poster,
 };

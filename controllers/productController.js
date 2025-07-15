@@ -1383,6 +1383,49 @@ exports.getOrdersByUser = async (req, res) => {
     }
 };
 
+exports.getLastOrder = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // Fetch the most recent order for the user
+        const lastOrder = await Order.findOne({
+            where: { userId },
+            include: [
+                {
+                    model: OrderProduct,
+                    as: 'orderItems',
+                    include: [
+                        {
+                            model: Product,
+                            attributes: ['id', 'name', 'price', 'imageUrl']
+                        }
+                    ]
+                },
+                {
+                    model: Transaction,
+                    attributes: ['amount', 'status', 'paymentType']
+                },
+                {
+                    model: DeliveryAddress,
+                    as: 'address',
+                    attributes: ['fullName', 'phoneNumber', 'street']
+                }
+            ],
+            order: [['createdAt', 'DESC']],
+            limit: 1
+        });
+
+        if (!lastOrder) {
+            return res.status(404).json({ message: 'No orders found for this user' });
+        }
+
+        return res.status(200).json(lastOrder);
+    } catch (error) {
+        console.error('Error fetching last order:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
 exports.addToWishlist = async (req, res) => {
     try {
         const { userId, productId } = req.body;

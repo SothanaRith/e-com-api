@@ -1,4 +1,4 @@
-const { Category, Product, Wishlist, Cart, Slide } = require("../models");
+const { Category, Product, Wishlist, Cart, Slide,Poster } = require("../models");
 const { successResponse, failResponse } = require("../utils/baseResponse");
 const Notification = require('../models/Notification');
 
@@ -237,6 +237,119 @@ exports.deleteSlide = async (req, res) => {
     return res.status(200).json(successResponse("Slide deleted successfully"));
   } catch (error) {
     console.error("Error deleting slide:", error);
+    return res.status(500).json(failResponse("Internal server error", error.message));
+  }
+};
+
+exports.createPoster = async (req, res) => {
+  try {
+    const { title, description, isActive, order } = req.body;
+
+    let imageUrl = '';
+
+    // Check environment and set imageUrl based on environment
+    if (process.env.NODE_ENV === 'development') {
+      // In development, use local file storage
+      imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    } else {
+      // In production, use cloud storage (e.g., AWS S3 or similar)
+      imageUrl = req.file?.location || null;
+    }
+
+    // Create poster entry in the database
+    const poster = await Poster.create({
+      title,
+      description,
+      imageUrl,
+      isActive,
+      order,
+    });
+
+    return res.status(201).json(successResponse("Poster created successfully", poster));
+  } catch (error) {
+    console.error("Error creating poster:", error);
+    return res.status(500).json(failResponse("Internal server error", error.message));
+  }
+};
+
+// Update Poster (PUT)
+exports.updatePoster = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, isActive, order } = req.body;
+
+    let imageUrl = '';
+
+    // Check environment and set imageUrl based on environment
+    if (process.env.NODE_ENV === 'development') {
+      // In development, use local file storage
+      imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    } else {
+      // In production, use cloud storage (e.g., AWS S3 or similar)
+      imageUrl = req.file?.location || null;
+    }
+
+    // Find the poster by ID
+    const poster = await Poster.findByPk(id);
+
+    if (!poster) {
+      return res.status(404).json(failResponse("Poster not found"));
+    }
+
+    // Update poster fields (only fields provided will be updated)
+    poster.title = title || poster.title;
+    poster.description = description || poster.description;
+    poster.imageUrl = imageUrl || poster.imageUrl;
+    poster.isActive = isActive !== undefined ? isActive : poster.isActive;
+    poster.order = order || poster.order;
+
+    // Save updated poster
+    await poster.save();
+
+    return res.status(200).json(successResponse("Poster updated successfully", poster));
+  } catch (error) {
+    console.error("Error updating poster:", error);
+    return res.status(500).json(failResponse("Internal server error", error.message));
+  }
+};
+
+// Delete Poster (DELETE)
+exports.deletePoster = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find the poster by ID
+    const poster = await Poster.findByPk(id);
+
+    if (!poster) {
+      return res.status(404).json(failResponse("Poster not found"));
+    }
+
+    // Delete the poster
+    await poster.destroy();
+
+    return res.status(200).json(successResponse("Poster deleted successfully"));
+  } catch (error) {
+    console.error("Error deleting poster:", error);
+    return res.status(500).json(failResponse("Internal server error", error.message));
+  }
+};
+
+// Get All Posters (GET)
+exports.getAllPosters = async (req, res) => {
+  try {
+    const { activeOnly } = req.query;
+
+    const whereCondition = activeOnly === 'true' ? { isActive: true } : {};
+
+    const posters = await Poster.findAll({
+      where: whereCondition,
+      order: [["order", "ASC"]],
+    });
+
+    return res.status(200).json(successResponse("Posters fetched successfully", posters));
+  } catch (error) {
+    console.error("Error fetching posters:", error);
     return res.status(500).json(failResponse("Internal server error", error.message));
   }
 };

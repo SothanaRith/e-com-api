@@ -16,6 +16,7 @@ router.patch('/:productId/update-stock', productController.updateTotalStock);
 router.post("/buy/:userId", productController.buyProduct);
 router.post("/place-order", productController.placeOrder);
 router.get("/orders/:userId", productController.getOrdersByUser);
+router.get('/orders/last/:userId', productController.getLastOrder);
 router.post('/orders/:orderId/status', productController.updateOrderStatus);
 router.get('/transactions/:status/:userId', productController.getTransactionsByUser);
 router.get('/admin/orders/processed', productController.getAdminGroupedOrders);
