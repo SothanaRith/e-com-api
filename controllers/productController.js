@@ -1342,7 +1342,11 @@ exports.getCart = async (req, res) => {
             include: [
                 {
                     model: Product,
-                    attributes: ['id', 'name', 'price', 'imageUrl']
+                    attributes: ['id', 'name']
+                },
+                {
+                    model: Variant,  // Add Variant model
+                    attributes: ['id', 'title', 'price', 'imageUrl'],  // Assuming the variant has these attributes
                 }
             ]
         });
