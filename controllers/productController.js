@@ -400,7 +400,6 @@ exports.getProductById = async (req, res) => {
         res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
-
 exports.placeOrder = async (req, res) => {
     const { userId, items, paymentType, deliveryAddressId, billingNumber } = req.body;
 
@@ -427,22 +426,34 @@ exports.placeOrder = async (req, res) => {
 
         let totalAmount = 0;
 
-        // 3. Validate stock and calculate total
+        // 3. Validate items and calculate total
         for (const item of items) {
-            const { productId, quantity } = item;
+            const { productId, variantId, quantity } = item;
 
-            if (!productId || !quantity || quantity <= 0) {
+            if (!productId || !variantId || !quantity || quantity <= 0) {
                 throw new Error("Invalid item data");
             }
 
             const product = await Product.findByPk(productId, { transaction });
             if (!product) throw new Error(`Product ID ${productId} not found`);
 
-            if (quantity > product.totalStock) {
-                throw new Error(`Insufficient stock for product ${product.name}`);
+            const variant = await Variant.findByPk(variantId, { transaction });
+            if (!variant || variant.productId !== product.id) {
+                throw new Error(`Invalid or mismatched variant for product ID ${productId}`);
             }
 
-            totalAmount += product.price * quantity;
+            if (quantity > variant.stock) {
+                throw new Error(`Insufficient stock for variant ID ${variantId}`);
+            }
+
+            const finalPrice = calculateFinalPrice(
+                variant.price,
+                variant.discountType,
+                variant.discountValue,
+                variant.isPromotion
+            );
+
+            totalAmount += finalPrice * quantity;
         }
 
         // 4. Create order
@@ -455,78 +466,56 @@ exports.placeOrder = async (req, res) => {
             billingNumber
         }, { transaction });
 
+        // 5. Track order status
         await OrderTracking.create({
             orderId: order.id,
             status: "pending",
             timestamp: new Date()
         }, { transaction });
 
+        // 6. Add order items and update variant stock
         for (const item of items) {
             const { productId, variantId, quantity } = item;
 
-            const product = await Product.findByPk(productId, { transaction });
             const variant = await Variant.findByPk(variantId, { transaction });
 
-            if (!variant || variant.productId !== product.id) {
-                throw new Error(`Invalid variant for product ${productId}`);
-            }
-
-            if (quantity > variant.stock) {
-                throw new Error(`Insufficient stock for variant ${variantId}`);
-            }
-
-            const finalPrice = calculateFinalPrice(variant.price, variant.discountType, variant.discountValue, variant.isPromotion);
-
-            totalAmount += finalPrice * quantity;
+            const finalPrice = calculateFinalPrice(
+                variant.price,
+                variant.discountType,
+                variant.discountValue,
+                variant.isPromotion
+            );
 
             await OrderProduct.create({
                 orderId: order.id,
                 productId,
-                variantId: null, // no variant anymore
+                variantId,
                 quantity,
-                price: finalPrice,
+                price: finalPrice
             }, { transaction });
 
-            variant.stock -= quantity
-            await variant.save();
+            variant.stock -= quantity;
+            await variant.save({ transaction });
         }
 
-        // // 5. Create OrderProduct & decrement stock
-        // for (const item of items) {
-        //     const { productId, quantity } = item;
-        //
-        //     const product = await Product.findByPk(productId, { transaction });
-        //     const price = product.price;
-        //
-        //     await product.decrement("totalStock", { by: quantity, transaction });
-        //
-        //     await OrderProduct.create({
-        //         orderId: order.id,
-        //         productId,
-        //         variantId: null, // no variant anymore
-        //         quantity,
-        //         price,
-        //     }, { transaction });
-        // }
-
-        // 6. Clear cart
+        // 7. Clear cart
         await Cart.destroy({
             where: { userId },
             transaction
         });
 
-        // 7. Create transaction record
+        // 8. Create payment transaction
         await Transaction.create({
             orderId: order.id,
             paymentType,
             amount: totalAmount,
-            status: "pending",
+            status: "pending"
         }, { transaction });
 
-        // 8. Get updated product stocks
-        const updatedProducts = await Product.findAll({
+        // 9. Get updated variant stocks
+        const updatedVariants = await Variant.findAll({
             where: {
-                id: items.map(i => i.productId)
+                id: items.map(i => i.variantId)
             },
             transaction
         });
@@ -537,10 +526,11 @@ exports.placeOrder = async (req, res) => {
             message: "Order placed successfully",
             orderId: order.id,
             totalAmount,
-            address: address,
-            updatedStocks: updatedProducts.map(p => ({
-                productId: p.id,
-                totalStock: p.totalStock
+            address,
+            updatedStocks: updatedVariants.map(v => ({
+                variantId: v.id,
+                productId: v.productId,
+                stock: v.stock
             }))
         });
 
