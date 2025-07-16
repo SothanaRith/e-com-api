@@ -489,7 +489,6 @@ exports.placeOrder = async (req, res) => {
 
             variant.stock -= quantity
             await variant.save();
-
         }
 
         // // 5. Create OrderProduct & decrement stock
