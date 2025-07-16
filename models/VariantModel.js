@@ -10,6 +10,18 @@ const Variant = sequelize.define("Variant", {
         allowNull: false,
         references: { model: "Products", key: "id" },
     },
+    discountType: {
+        type: DataTypes.ENUM('fixed', 'percent'), // 'fixed' = $ amount, 'percent' = percentage
+        defaultValue: null,
+    },
+    discountValue: {
+        type: DataTypes.FLOAT,
+        defaultValue: 0,
+    },
+    isPromotion: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+    },
     title: { type: DataTypes.STRING },
     sku: { type: DataTypes.STRING, allowNull: false },
     price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },

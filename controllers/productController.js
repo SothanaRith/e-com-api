@@ -18,6 +18,20 @@ const sequelize = require('../config/db');
 const { Sequelize } = require('sequelize');
 const Notification = require('../models/Notification');
 
+function calculateFinalPrice(price, discountType, discountValue, isPromotion) {
+    if (!isPromotion || !discountType || discountValue <= 0) return price;
+
+    if (discountType === 'fixed') {
+        return Math.max(0, price - discountValue); // Prevent negative price
+    }
+
+    if (discountType === 'percent') {
+        return parseFloat((price * (1 - discountValue / 100)).toFixed(2));
+    }
+
+    return price;
+}
+
 exports.createProduct = async (req, res) => {
     try {
         const {
@@ -306,7 +320,7 @@ exports.getProductById = async (req, res) => {
                 { model: Category, attributes: { exclude: [] } },
                 {
                     model: Variant,
-                    attributes: ['id', 'productId', 'sku', 'price', 'title', 'stock', 'imageUrl'],
+                    attributes: { exclude: [] },
                     include: [{ model: VariantAttribute, attributes: ['name', 'value'] }]
                 },
                 {
@@ -1129,10 +1143,9 @@ exports.searchProducts = async (req, res) => {
 exports.addVariant = async (req, res) => {
     try {
         const { productId } = req.params;
+        const { sku, price, stock, title, discountType, discountValue, isPromotion } = req.body;
 
-        const { sku, price, stock, title } = req.body;
         let attributes = [];
-
         try {
             attributes = JSON.parse(req.body.attributes || '[]');
         } catch (e) {
@@ -1140,14 +1153,23 @@ exports.addVariant = async (req, res) => {
         }
 
         let imageUrl = '';
-
         if (process.env.NODE_ENV === 'development') {
             imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
         } else {
             imageUrl = req.file?.location;
         }
 
-        const variant = await Variant.create({ productId, sku, price, stock, imageUrl, title });
+        const variant = await Variant.create({
+            productId,
+            sku,
+            price,
+            stock,
+            title,
+            imageUrl,
+            discountType: discountType || null,
+            discountValue: discountValue || 0,
+            isPromotion: isPromotion === 'true' || isPromotion === true
+        });
 
         if (attributes && Array.isArray(attributes)) {
             for (const attr of attributes) {
@@ -1159,7 +1181,7 @@ exports.addVariant = async (req, res) => {
             }
         }
 
-        // 🟢 Check if this is the first variant and update product price
+        // Update product price if this is the first variant
         const variants = await Variant.findAll({ where: { productId }, order: [['id', 'ASC']] });
         if (variants.length === 1) {
             const product = await Product.findByPk(productId);
@@ -1177,10 +1199,9 @@ exports.addVariant = async (req, res) => {
 exports.updateVariant = async (req, res) => {
     try {
         const { variantId } = req.params;
+        const { sku, price, stock, title, discountType, discountValue, isPromotion } = req.body;
 
-        const { sku, price, stock, title } = req.body;
         let attributes = [];
-
         try {
             attributes = JSON.parse(req.body.attributes || '[]');
         } catch (e) {
@@ -1188,7 +1209,6 @@ exports.updateVariant = async (req, res) => {
         }
 
         let imageUrl = '';
-
         if (process.env.NODE_ENV === 'development') {
             imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
         } else {
@@ -1198,9 +1218,16 @@ exports.updateVariant = async (req, res) => {
         const variant = await Variant.findByPk(variantId);
         if (!variant) return res.status(404).json({ message: 'Variant not found' });
 
-        await variant.update({ sku, price, stock, imageUrl, title });
-
-        console.log(attributes)
+        await variant.update({
+            sku: sku || variant.sku,
+            price: price || variant.price,
+            stock: stock || variant.stock,
+            imageUrl: imageUrl || variant.imageUrl,
+            title: title || variant.title,
+            discountType: discountType || null,
+            discountValue: discountValue || 0,
+            isPromotion: isPromotion === 'true' || isPromotion === true
+        });
 
         if (attributes && Array.isArray(attributes)) {
             await VariantAttribute.destroy({ where: { variantId } });
@@ -1213,7 +1240,7 @@ exports.updateVariant = async (req, res) => {
             }
         }
 
-        // 🟢 Update product price if this variant is the first one
+        // Update product price if this variant is the first one
         const variants = await Variant.findAll({
             where: { productId: variant.productId },
             order: [['id', 'ASC']]
@@ -1346,7 +1373,7 @@ exports.getCart = async (req, res) => {
                 },
                 {
                     model: Variant,  // Add Variant model
-                    attributes: ['id', 'title', 'price', 'imageUrl'],  // Assuming the variant has these attributes
+                    attributes: { exclude: [] },  // Assuming the variant has these attributes
                 }
             ]
         });
