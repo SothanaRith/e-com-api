@@ -461,23 +461,54 @@ exports.placeOrder = async (req, res) => {
             timestamp: new Date()
         }, { transaction });
 
-        // 5. Create OrderProduct & decrement stock
         for (const item of items) {
-            const { productId, quantity } = item;
+            const { productId, variantId, quantity } = item;
 
             const product = await Product.findByPk(productId, { transaction });
-            const price = product.price;
+            const variant = await Variant.findByPk(variantId, { transaction });
 
-            await product.decrement("totalStock", { by: quantity, transaction });
+            if (!variant || variant.productId !== product.id) {
+                throw new Error(`Invalid variant for product ${productId}`);
+            }
+
+            if (quantity > variant.stock) {
+                throw new Error(`Insufficient stock for variant ${variantId}`);
+            }
+
+            const finalPrice = calculateFinalPrice(variant.price, variant.discountType, variant.discountValue, variant.isPromotion);
+
+            totalAmount += finalPrice * quantity;
 
             await OrderProduct.create({
                 orderId: order.id,
                 productId,
                 variantId: null, // no variant anymore
                 quantity,
-                price,
+                price: finalPrice,
             }, { transaction });
+
+            variant.stock -= quantity
+            await variant.save();
+
         }
+
+        // // 5. Create OrderProduct & decrement stock
+        // for (const item of items) {
+        //     const { productId, quantity } = item;
+        //
+        //     const product = await Product.findByPk(productId, { transaction });
+        //     const price = product.price;
+        //
+        //     await product.decrement("totalStock", { by: quantity, transaction });
+        //
+        //     await OrderProduct.create({
+        //         orderId: order.id,
+        //         productId,
+        //         variantId: null, // no variant anymore
+        //         quantity,
+        //         price,
+        //     }, { transaction });
+        // }
 
         // 6. Clear cart
         await Cart.destroy({
@@ -814,7 +845,8 @@ exports.buyProduct = async (req, res) => {
         }
 
         // Calculate total amount (rounded to 2 decimal places)
-        const totalAmount = (variant.price * quantity).toFixed(2);
+        const finalPrice = calculateFinalPrice(variant.price, variant.discountType, variant.discountValue, variant.isPromotion);
+        const totalAmount = (finalPrice * quantity).toFixed(2);
 
         // Create the order (without reducing stock yet)
         const order = await Order.create({
