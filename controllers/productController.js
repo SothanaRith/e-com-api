@@ -428,6 +428,7 @@ exports.placeOrder = async (req, res) => {
 
         // 3. Validate items and calculate total
         for (const item of items) {
+            console.log(items.length)
             const { productId, variantId, quantity } = item;
 
             if (!productId || !variantId || !quantity || quantity <= 0) {
@@ -637,7 +638,14 @@ exports.getOrderDetailById = async (req, res) => {
                     include: [
                         {
                             model: Product,
-                            attributes: ['id', 'name', 'price', 'imageUrl', 'description']
+                            attributes: ['id', 'name', 'price', 'imageUrl', 'description'],
+                            include: [
+                                {
+                                    model: Variant,
+                                    attributes: { exclude: [] },
+                                    include: [{ model: VariantAttribute, attributes: ['name', 'value'] }]
+                                },
+                            ]
                         }
                     ]
                 },
@@ -1743,7 +1751,15 @@ exports.getOrdersByUserAndStatus = async (req, res) => {
                     include: [
                         {
                             model: Product,
-                            attributes: ['id', 'name', 'price', 'imageUrl']
+                            as: 'Product',
+                            attributes: ['id', 'name', 'price', 'imageUrl'],
+                            include: [
+                                {
+                                    model: Variant,
+                                    attributes: { exclude: [] },
+                                    include: [{ model: VariantAttribute, attributes: ['name', 'value'] }]
+                                },
+                            ]
                         }
                     ]
                 },
@@ -1802,6 +1818,21 @@ exports.getOrdersByUserAndStatus = async (req, res) => {
                         name: item.Product.name,
                         price: item.Product.price,
                         imageUrl: item.Product.imageUrl,
+                        Variants: item.Product.Variants?.map(variant => ({
+                            id: variant.id,
+                            title: variant.title,
+                            sku: variant.sku,
+                            price: variant.price,
+                            stock: variant.stock,
+                            discountType: variant.discountType,
+                            discountValue: variant.discountValue,
+                            isPromotion: variant.isPromotion,
+                            imageUrl: variant.imageUrl,
+                            attributes: variant.VariantAttributes?.map(attr => ({
+                                name: attr.name,
+                                value: attr.value
+                            })) || []
+                        })) || []
                     }
                 })),
                 address: order.address ? {
