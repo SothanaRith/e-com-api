@@ -19,6 +19,7 @@ router.delete("/slides/:id", loadHomeController.deleteSlide);
 router.post('/posters', upload.single("image"), loadHomeController.createPoster);   // Create poster
 router.put('/posters/:id', upload.single("image"), loadHomeController.updatePoster); // Update poster
 router.delete('/posters/:id', loadHomeController.deletePoster); // Delete poster
+router.get('/posters/:id', loadHomeController.getPosterById);
 router.get('/posters', loadHomeController.getAllPosters);   // Get all posters
 
 module.exports = router;

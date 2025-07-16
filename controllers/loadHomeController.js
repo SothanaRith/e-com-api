@@ -353,3 +353,20 @@ exports.getAllPosters = async (req, res) => {
     return res.status(500).json(failResponse("Internal server error", error.message));
   }
 };
+
+exports.getPosterById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const poster = await Poster.findByPk(id);
+
+    if (!poster) {
+      return res.status(404).json(failResponse("Poster not found"));
+    }
+
+    return res.status(200).json(successResponse("Poster fetched successfully", poster));
+  } catch (error) {
+    console.error("Error fetching poster:", error);
+    return res.status(500).json(failResponse("Internal server error", error.message));
+  }
+};
