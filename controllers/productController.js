@@ -671,11 +671,26 @@ exports.getOrderDetailById = async (req, res) => {
             return res.status(404).json({ message: "Order not found" });
         }
 
-        // ✅ Dynamically calculate totalAmount
+// ✅ Dynamically calculate totalAmount from variants
         const totalAmount = order.orderItems.reduce((total, item) => {
-            const productPrice = parseFloat(item.Product?.price || 0);
+            const variantId = item.variantId;
+            const variants = item.Product.Variants || [];
+
+            // ✅ Match the correct variant
+            const variant = variants.find(v => v.id === variantId);
+
+            let price = variant?.price || 0;
             const quantity = item.quantity || 0;
-            return total + productPrice * quantity;
+
+            if (variant?.isPromotion) {
+                if (variant.discountType === 'fixed') {
+                    price = Math.max(0, price - (variant.discountValue || 0));
+                } else if (variant.discountType === 'percent') {
+                    price = price * (1 - (variant.discountValue || 0) / 100);
+                }
+            }
+
+            return total + price * quantity;
         }, 0);
 
         // Append or override totalAmount
