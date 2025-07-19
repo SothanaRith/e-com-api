@@ -3,6 +3,9 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
 const sequelize = require('./config/db');
+const http = require('http');
+const socketIo = require('socket.io');
+
 // Routes
 const authRoutes = require('./routes/authRoutes');
 const chatRoutes = require('./routes/chatRoutes');
@@ -20,7 +23,6 @@ const deliveryAddressRoutes = require("./routes/deliveryAddressRoutes");
 const adminNotification = require("./config/firebase_admin");
 const paymentRoutes = require('./routes/paymentRoutes');
 const notificationRoutes = require('./routes/notificationRoutes'); // Import the notification routes
-
 
 const app = express();
 
@@ -49,11 +51,35 @@ app.use("/api/delivery-addresses", deliveryAddressRoutes);
 app.use("/api/notification", notificationRoutes);
 app.use('/api/payment', paymentRoutes);
 
+// Create an HTTP server and bind Socket.IO
+const server = http.createServer(app);
+const io = socketIo(server);
+
+// Handle socket connections
+io.on('connection', (socket) => {
+  console.log('New user connected: ' + socket.id);
+
+  // Handle receiving messages
+  socket.on('sendMessage', async (data) => {
+    const { sender_id, receiver_id, message } = data;
+    // Store message logic goes here
+    console.log('Message received: ', message);
+
+    // Emit the message to the receiver
+    io.to(receiver_id).emit('newMessage', { sender_id, message });
+    socket.emit('newMessage', { sender_id, message }); // Optionally send to sender too
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected: ' + socket.id);
+  });
+});
+
 // Sync database and start server
 sequelize.sync({ alter: true }).then(() => {
   console.log('Database synced');
   const PORT = 3000;
-  app.listen(PORT,'0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on :${PORT}`);
   });
 });
