@@ -1,167 +1,138 @@
 
+const User = require('../models/User')
+const Chat = require('../models/Chat')
 const { Op } = require('sequelize');
-const { Chat, User } = require('../models');
 
-
-exports.sendMessage = async (req, res) => {
-  const { senderId, receiverId, message, fileUrl } = req.body;
-
+// Get all messages between two users
+exports.getMessages = async (req, res) => {
   try {
-    // Validate input data
-    if (!senderId || !receiverId || (!message && !fileUrl)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Sender, receiver, and at least one of message or file URL are required' 
-      });
+    const { senderId, receiverId } = req.query;
+
+    if (!senderId || !receiverId) {
+      return res.status(400).json({ error: 'senderId and receiverId are required' });
     }
 
-    // Ensure both sender and receiver exist
-    const sender = await User.findByPk(senderId);
-    const receiver = await User.findByPk(receiverId);
-
-    if (!sender || !receiver) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Sender or receiver not found' 
-      });
-    }
-
-    // Validate fileUrl (if provided)
-    if (fileUrl) {
-      const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', // Image
-        '.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv', '.webm',
-        '.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac', '.amr'];
-      const fileExtension = fileUrl.substring(fileUrl.lastIndexOf('.')).toLowerCase();
-
-      if (!validExtensions.includes(fileExtension)) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid file type. Supported types are: images, videos, and audio files.' 
-        });
-      }
-    }
-
-    // Create the chat entry
-    const chat = await Chat.create({
-      sender_id: senderId,
-      receiver_id: receiverId,
-      message: message || '', // Default to empty string if no message
-      file_url: fileUrl || null, // Default to null if no file
-    });
-
-    res.status(201).json({ 
-      success: true, 
-      message: 'Message sent successfully', 
-      chat 
-    });
-  } catch (error) {
-    console.error('Error sending message:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error sending message', 
-      error: error.message 
-    });
-  }
-};
-
-
-exports.getChatHistory = async (req, res) => {
-  const { senderId, receiverId } = req.params;
-  const { page = 1, limit = 20 } = req.query; // Default to 20 messages per page
-
-  try {
-    const offset = (page - 1) * limit;
-    const chatHistory = await Chat.findAll({
+    const messages = await Chat.findAll({
       where: {
         [Op.or]: [
           { sender_id: senderId, receiver_id: receiverId },
-          { sender_id: receiverId, receiver_id: senderId },
-        ],
+          { sender_id: receiverId, receiver_id: senderId }
+        ]
       },
-      order: [['timestamp', 'ASC']],
-      limit: parseInt(limit, 10),
-      offset,
+      include: [
+        { model: User, as: 'sender' },
+        { model: User, as: 'receiver' }
+      ],
+      order: [['timestamp', 'ASC']]
     });
 
-    res.status(200).json({ success: true, chatHistory });
+    return res.json(messages);
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching chat history', error });
+    return res.status(500).json({ error: error.message });
   }
 };
 
-exports.getUnreadMessageCount = async (req, res) => {
-  const { userId } = req.params;
-
+// Send a new message
+exports.sendMessage = async (req, res) => {
   try {
-    const unreadCount = await Chat.count({
-      where: {
-        receiver_id: userId,
-        is_read: false,
-      },
+    const { sender_id, receiver_id, message, file_url } = req.body;
+
+    if (!sender_id || !receiver_id || (!message && !file_url)) {
+      return res.status(400).json({ error: 'sender_id, receiver_id and message/file_url are required' });
+    }
+
+    // Create a new message chat
+    const newMessage = await Chat.create({
+      sender_id,
+      receiver_id,
+      message,
+      file_url
     });
 
-    res.status(200).json({ success: true, unreadCount });
+    // Fetch the updated chat with sender and receiver details
+    const updatedChat = await Chat.findOne({
+      where: { id: newMessage.id },
+      include: [
+        { model: User, as: 'sender' },
+        { model: User, as: 'receiver' }
+      ]
+    });
+
+    return res.status(201).json(updatedChat);
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching unread message count', error });
+    return res.status(500).json({ error: error.message });
   }
 };
+
+// Mark messages as read
+exports.markAsRead = async (req, res) => {
+  try {
+    const { senderId, receiverId } = req.body;
+
+    await Chat.update(
+        { is_read: true },
+        {
+          where: {
+            sender_id: senderId,
+            receiver_id: receiverId,
+            is_read: false
+          }
+        }
+    );
+
+    return res.json({ message: 'Messages marked as read' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Pin a message
 exports.pinMessage = async (req, res) => {
-  const { chatId, userId, pin } = req.body; // `pin` is a boolean to pin or unpin
-
   try {
-    // Validate input
-    if (!chatId || userId === undefined || pin === undefined) {
-      return res.status(400).json({ success: false, message: 'chatId, userId, and pin are required' });
-    }
+    const { messageId, userId } = req.body;
 
-    // Find the chat message
-    const chat = await Chat.findByPk(chatId);
-    if (!chat) {
-      return res.status(404).json({ success: false, message: 'Message not found' });
-    }
+    const chat = await Chat.findByPk(messageId);
+    if (!chat) return res.status(404).json({ error: 'Message not found' });
 
-    // Find the user who is pinning/unpinning
-    const user = await User.findByPk(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
+    await chat.update({ pinned: true, pinned_by: userId });
 
-    // Update the chat message
-    chat.pinned = pin;
-    chat.pinned_by = pin ? userId : null;
-    await chat.save();
-
-    res.status(200).json({
-      success: true,
-      message: `Message ${pin ? 'pinned' : 'unpinned'} successfully`,
-      chat,
-    });
+    return res.json({ message: 'Message pinned', chat });
   } catch (error) {
-    console.error('Error pinning message:', error);
-    res.status(500).json({ success: false, message: 'Error pinning message', error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 };
 
-exports.getActiveUsers = async (req, res) => {
+exports.getChatsAndContacts = async (req, res) => {
   try {
-    const threshold = new Date(new Date() - 5 * 60 * 1000); // 5 minutes ago
-    const activeUsers = await User.findAll({
+    const searchQuery = req.query.q || '';  // If there's a search query
+    const chats = await Chat.findAll({
+      include: [
+         { model: User, as: 'sender', attributes: {exclude: ["password", "phone", "hashedRefreshToken", "roleId"]} },
+         { model: User, as: 'receiver', attributes: {exclude: ["password", "phone", "hashedRefreshToken", "roleId"]} }
+      ],
       where: {
-        lastActive: { [Op.gt]: threshold },
+        [Op.or]: [
+          { '$sender.name$': { [Op.like]: `%${searchQuery}%` } },  // Changed 'fullName' to 'name'
+          { '$receiver.name$': { [Op.like]: `%${searchQuery}%` } }  // Changed 'fullName' to 'name'
+        ]
       },
-      attributes: ['id', 'name', 'email', 'lastActive'],
     });
 
-    res.status(200).json({
-      success: true,
-      activeUsers,
+    const contacts = await User.findAll({
+      where: { name: { [Op.like]: `%${searchQuery}%` } }  // Changed 'fullName' to 'name'
+    });
+
+    const profileUser = await User.findOne({
+      where: { id: req.query.userId }  // Adjust based on your user auth system
+    });
+
+    return res.json({
+      chatsContacts: chats,
+      contacts: contacts,
+      profileUser: profileUser
     });
   } catch (error) {
-    console.error('Error fetching active users:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching active users',
-      error: error.message,
-    });
+    console.error('Error fetching chats and contacts:', error);
+    return res.status(500).json({ error: 'Failed to fetch data' });
   }
 };

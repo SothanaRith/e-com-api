@@ -1,15 +1,19 @@
 const express = require('express');
-const { sendMessage, getChatHistory, pinMessage, getActiveUsers } = require('../controllers/chatController');
-const { chatWithBot, clearChatHistory, chatTuboWithBot } = require("../controllers/gptChatController");
 const router = express.Router();
+const chatController = require('../controllers/chatController');
 
-router.get('/history/:senderId/:receiverId', getChatHistory);
-router.post('/send-message', sendMessage);
-router.post('/pinMessage', pinMessage);
-router.get('/active-users', getActiveUsers);
+// GET /api/chats?senderId=1&receiverId=2
+router.get('/', chatController.getMessages);
 
-// router.post("/chat", chatWithBot);
-// router.post("/chat-tubo", chatTuboWithBot);
-// router.post("/clear", clearChatHistory);
+// POST /api/chats
+router.post('/', chatController.sendMessage);
+
+// PUT /api/chats/mark-as-read
+router.put('/mark-as-read', chatController.markAsRead);
+
+// PUT /api/chats/pin
+router.put('/pin', chatController.pinMessage);
+
+router.get('/chats-and-contacts', chatController.getChatsAndContacts);
 
 module.exports = router;
