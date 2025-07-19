@@ -5,6 +5,8 @@ const path = require('path');
 const sequelize = require('./config/db');
 const http = require('http');
 const socketIo = require('socket.io');
+const Chat = require('./models/Chat');
+const User = require('./models/User');
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
@@ -55,23 +57,44 @@ app.use('/api/payment', paymentRoutes);
 const server = http.createServer(app);
 const io = socketIo(server);
 
+const userSockets = {};
+
 // Handle socket connections
 io.on('connection', (socket) => {
   console.log('New user connected: ' + socket.id);
 
-  // Handle receiving messages
+  // When user connects, store mapping
+  socket.on('registerUser', (userId) => {
+    userSockets[userId] = socket.id;
+    console.log(`User ${userId} is connected with socket ID: ${socket.id}`);
+  });
+
+  // When message is sent
   socket.on('sendMessage', async (data) => {
     const { sender_id, receiver_id, message } = data;
-    // Store message logic goes here
-    console.log('Message received: ', message);
 
-    // Emit the message to the receiver
-    io.to(receiver_id).emit('newMessage', { sender_id, message });
-    socket.emit('newMessage', { sender_id, message }); // Optionally send to sender too
+    // Save message to DB
+    const newMessage = await Chat.create({
+      sender_id,
+      receiver_id,
+      message
+    });
+
+    // Send message to receiver if online
+    if (userSockets[receiver_id]) {
+      io.to(userSockets[receiver_id]).emit('newMessage', newMessage);
+    }
+
+    // Send message back to sender
+    socket.emit('newMessage', newMessage);
   });
 
   socket.on('disconnect', () => {
     console.log('User disconnected: ' + socket.id);
+    // Remove user from map
+    for (const [userId, id] of Object.entries(userSockets)) {
+      if (id === socket.id) delete userSockets[userId];
+    }
   });
 });
 
