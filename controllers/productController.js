@@ -400,6 +400,7 @@ exports.getProductById = async (req, res) => {
         res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
+
 exports.placeOrder = async (req, res) => {
     const { userId, items, paymentType, deliveryAddressId, billingNumber } = req.body;
 
@@ -497,6 +498,14 @@ exports.placeOrder = async (req, res) => {
 
             variant.stock -= quantity;
             await variant.save({ transaction });
+
+            // Update product's total stock
+            const variants = await Variant.findAll({ where: { productId }, transaction });
+            const totalStock = variants.reduce((sum, v) => sum + v.stock, 0);
+            const product = await Product.findByPk(productId, { transaction });
+            if (product) {
+                await product.update({ totalStock }, { transaction });
+            }
         }
 
         // 7. Clear cart
