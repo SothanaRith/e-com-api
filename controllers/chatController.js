@@ -20,13 +20,24 @@ exports.getMessages = async (req, res) => {
         ]
       },
       include: [
-        { model: User, as: 'sender' },
-        { model: User, as: 'receiver' }
+        { model: User, as: 'sender', attributes: ['id', 'name', 'email'] },
+        { model: User, as: 'receiver', attributes: ['id', 'name', 'email'] }
       ],
       order: [['timestamp', 'ASC']]
     });
 
-    return res.json(messages);
+    // Format the messages to include sender and receiver info
+    const formattedMessages = messages.map(message => {
+      return {
+        ...message.toJSON(),
+        sender_name: message.sender.name,
+        receiver_name: message.receiver.name,
+        sender_email: message.sender.email,
+        receiver_email: message.receiver.email
+      };
+    });
+
+    return res.json(formattedMessages);
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

@@ -73,20 +73,33 @@ io.on('connection', (socket) => {
   socket.on('sendMessage', async (data) => {
     const { sender_id, receiver_id, message } = data;
 
-    // Save message to DB
+    // Save message to DB with sender and receiver information
     const newMessage = await Chat.create({
       sender_id,
       receiver_id,
       message
     });
 
+    // Fetch sender and receiver information
+    const sender = await User.findByPk(sender_id);
+    const receiver = await User.findByPk(receiver_id);
+
+    // Include sender and receiver information in the response
+    const messageWithUserInfo = {
+      ...newMessage.toJSON(),
+      sender_name: sender ? sender.name : 'Unknown',
+      receiver_name: receiver ? receiver.name : 'Unknown',
+      sender_email: sender ? sender.email : 'Unknown',
+      receiver_email: receiver ? receiver.email : 'Unknown',
+    };
+
     // Send message to receiver if online
     if (userSockets[receiver_id]) {
-      io.to(userSockets[receiver_id]).emit('newMessage', newMessage);
+      io.to(userSockets[receiver_id]).emit('newMessage', messageWithUserInfo);
     }
 
     // Send message back to sender
-    socket.emit('newMessage', newMessage);
+    socket.emit('newMessage', messageWithUserInfo);
   });
 
   socket.on('disconnect', () => {
