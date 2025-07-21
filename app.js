@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const sequelize = require('./config/db');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -73,31 +74,27 @@ io.on('connection', (socket) => {
   socket.on('sendMessage', async (data) => {
     const { sender_id, receiver_id, message, image_base64 } = data;
 
-    // Validate image size (if Base64 image is provided)
+    let fileUrl;
     if (image_base64) {
-      const base64Data = image_base64.split(',')[1];  // Remove metadata part
-      const imageBuffer = Buffer.from(base64Data, 'base64');
-      const imageSizeInKB = imageBuffer.length / 1024;  // Size in KB
+      // Decode base64 and save as image file
+      const buffer = Buffer.from(image_base64, 'base64');
+      const fileName = `${Date.now()}.png`;  // Use timestamp for unique file name
+      const filePath = path.join(__dirname, 'uploads', fileName);
 
-      if (imageSizeInKB > 100) {
-        return socket.emit('error', { message: 'Image size should not exceed 100 KB' });
-      }
+      fs.writeFileSync(filePath, buffer);
+      fileUrl = `/uploads/${fileName}`;
     }
 
-    // Save message to DB with sender and receiver information
+    // Save message to database with the image URL if available
     const newMessage = await Chat.create({
       sender_id,
       receiver_id,
       message,
-      image_base64  // Save the Base64 image in the database
+      file_url: fileUrl,
     });
 
-    // Send message to receiver if online
-    if (userSockets[receiver_id]) {
-      io.to(userSockets[receiver_id]).emit('newMessage', newMessage);
-    }
-
-    // Send message back to sender
+    // Emit new message to client
+    io.to(userSockets[receiver_id]).emit('newMessage', newMessage);
     socket.emit('newMessage', newMessage);
   });
 
