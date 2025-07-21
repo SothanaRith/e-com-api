@@ -71,35 +71,34 @@ io.on('connection', (socket) => {
 
   // When message is sent
   socket.on('sendMessage', async (data) => {
-    const { sender_id, receiver_id, message } = data;
+    const { sender_id, receiver_id, message, image_base64 } = data;
+
+    // Validate image size (if Base64 image is provided)
+    if (image_base64) {
+      const base64Data = image_base64.split(',')[1];  // Remove metadata part
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+      const imageSizeInKB = imageBuffer.length / 1024;  // Size in KB
+
+      if (imageSizeInKB > 100) {
+        return socket.emit('error', { message: 'Image size should not exceed 100 KB' });
+      }
+    }
 
     // Save message to DB with sender and receiver information
     const newMessage = await Chat.create({
       sender_id,
       receiver_id,
-      message
+      message,
+      image_base64  // Save the Base64 image in the database
     });
-
-    // Fetch sender and receiver information
-    const sender = await User.findByPk(sender_id);
-    const receiver = await User.findByPk(receiver_id);
-
-    // Include sender and receiver information in the response
-    const messageWithUserInfo = {
-      ...newMessage.toJSON(),
-      sender_name: sender ? sender.name : 'Unknown',
-      receiver_name: receiver ? receiver.name : 'Unknown',
-      sender_email: sender ? sender.email : 'Unknown',
-      receiver_email: receiver ? receiver.email : 'Unknown',
-    };
 
     // Send message to receiver if online
     if (userSockets[receiver_id]) {
-      io.to(userSockets[receiver_id]).emit('newMessage', messageWithUserInfo);
+      io.to(userSockets[receiver_id]).emit('newMessage', newMessage);
     }
 
     // Send message back to sender
-    socket.emit('newMessage', messageWithUserInfo);
+    socket.emit('newMessage', newMessage);
   });
 
   socket.on('disconnect', () => {

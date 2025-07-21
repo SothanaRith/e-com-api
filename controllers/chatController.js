@@ -20,24 +20,13 @@ exports.getMessages = async (req, res) => {
         ]
       },
       include: [
-        { model: User, as: 'sender', attributes: ['id', 'name', 'email'] },
-        { model: User, as: 'receiver', attributes: ['id', 'name', 'email'] }
+        { model: User, as: 'sender' },
+        { model: User, as: 'receiver' }
       ],
       order: [['timestamp', 'ASC']]
     });
 
-    // Format the messages to include sender and receiver info
-    const formattedMessages = messages.map(message => {
-      return {
-        ...message.toJSON(),
-        sender_name: message.sender.name,
-        receiver_name: message.receiver.name,
-        sender_email: message.sender.email,
-        receiver_email: message.receiver.email
-      };
-    });
-
-    return res.json(formattedMessages);
+    return res.json(messages);
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -118,8 +107,8 @@ exports.getChatsAndContacts = async (req, res) => {
     const searchQuery = req.query.q || '';  // If there's a search query
     const chats = await Chat.findAll({
       include: [
-         { model: User, as: 'sender', attributes: {exclude: ["password", "phone", "hashedRefreshToken", "roleId"]} },
-         { model: User, as: 'receiver', attributes: {exclude: ["password", "phone", "hashedRefreshToken", "roleId"]} }
+        { model: User, as: 'sender', attributes: {exclude: ["password", "phone", "hashedRefreshToken", "roleId"]} },
+        { model: User, as: 'receiver', attributes: {exclude: ["password", "phone", "hashedRefreshToken", "roleId"]} }
       ],
       where: {
         [Op.or]: [
