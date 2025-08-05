@@ -1,5 +1,5 @@
 const express = require('express');
-const { register, login, sendOtpForReset, verifyOtp, refreshToken, resetPassword, logout, checkMail } = require('../controllers/authController');
+const { register, login, sendOtpForReset, verifyOtp, refreshToken, resetPassword, logout, checkMail, googleLogin } = require('../controllers/authController');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/authenticateToken'); // Assuming you put it in `authMiddleware.js`
 const rateLimit = require('express-rate-limit');
@@ -12,6 +12,7 @@ const loginLimiter = rateLimit({
 
 router.post('/register', register);
 router.post('/login', login, loginLimiter);
+router.post('/google-login', googleLogin);
 router.post('/check-mail', checkMail, loginLimiter);
 router.post('/send-otp', sendOtpForReset);
 router.post('/verify-otp', verifyOtp);

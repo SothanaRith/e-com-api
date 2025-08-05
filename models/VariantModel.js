@@ -14,6 +14,10 @@ const Variant = sequelize.define("Variant", {
         type: DataTypes.ENUM('fixed', 'percent'), // 'fixed' = $ amount, 'percent' = percentage
         defaultValue: null,
     },
+    isActive: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true,
+    },
     discountValue: {
         type: DataTypes.FLOAT,
         defaultValue: 0,

@@ -1252,7 +1252,7 @@ exports.addVariant = async (req, res) => {
 exports.updateVariant = async (req, res) => {
     try {
         const { variantId } = req.params;
-        const { sku, price, stock, title, discountType, discountValue, isPromotion } = req.body;
+        const { sku, price, stock, title, discountType, discountValue, isPromotion, isActive } = req.body;
 
         let attributes = [];
         try {
@@ -1279,6 +1279,7 @@ exports.updateVariant = async (req, res) => {
             title: title || variant.title,
             discountType: discountType || null,
             discountValue: discountValue || 0,
+            isActive: isActive || true,
             isPromotion: isPromotion === 'true' || isPromotion === true
         });
 

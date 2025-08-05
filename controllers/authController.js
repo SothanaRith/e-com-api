@@ -6,9 +6,12 @@ const { encrypt, decrypt, generateTokens } = require('../utils/crypto');
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
 const Blacklist = require('../models/Blacklist');
+const {OAuth2Client} = require("google-auth-library");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const transporter = nodemailer.createTransport({
   service: 'Gmail',
@@ -64,6 +67,71 @@ exports.register = async (req, res) => {
       success: false,
       message: 'Error registering user',
       error: error.message || error,
+    });
+  }
+};
+
+exports.googleLogin = async (req, res) => {
+
+  const { token } = req.body;
+
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+    const { sub, email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Google account has no email' });
+    }
+
+    let user = await User.findOne({ where: { email } });
+
+    if (!user) {
+      // Register new user
+      user = await User.create({
+        name: name || "Google User",
+        email,
+        password: '',
+        phone: '',
+        role: 'buyer',
+        isVerify: true,
+        status: 'active',
+        tokenVersion: 0,
+        hashedRefreshToken: '',
+        googleId: sub,
+      });
+    } else {
+      // If user exists but banned/inactive
+      if (user.status === 'banned') {
+        return res.status(403).json({ success: false, message: 'Your account is banned' });
+      }
+    }
+
+    const { accessToken, refreshToken } = await generateTokens(user);
+
+    return res.status(200).json({
+      success: true,
+      message: user.createdAt === user.updatedAt
+          ? 'Google registration successful'
+          : 'Google login successful',
+      status: user.password === ''
+          ? 'register'
+          : 'login',
+      accessToken,
+      refreshToken,
+      user: { email, name, picture }
+    });
+
+  } catch (error) {
+    console.error('Google login error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error logging in with Google',
+      error: error.message
     });
   }
 };

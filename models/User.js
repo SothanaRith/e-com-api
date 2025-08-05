@@ -30,7 +30,8 @@ const User = sequelize.define('Users', {
   isBlock: { type: DataTypes.BOOLEAN, defaultValue: false },
   userQR: { type: DataTypes.STRING },
   
-  password: { type: DataTypes.STRING, allowNull: false },
+  password: { type: DataTypes.STRING, allowNull: true },
+  googleId: { type: DataTypes.STRING, allowNull: true },
   phone: { type: DataTypes.STRING },
   role: {
     type: DataTypes.ENUM("buyer", "seller", "vendor", "admin"),
