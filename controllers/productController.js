@@ -1316,6 +1316,9 @@ exports.deleteVariant = async (req, res) => {
     try {
         const { variantId } = req.params;
 
+        // Remove variant from all user carts
+        await Cart.destroy({ where: { variantId } });
+
         // Delete related VariantAttribute entries first
         await VariantAttribute.destroy({ where: { variantId } });
 
