@@ -1271,6 +1271,10 @@ exports.updateVariant = async (req, res) => {
         const variant = await Variant.findByPk(variantId);
         if (!variant) return res.status(404).json({ message: 'Variant not found' });
 
+        if (isActive === false) {
+            await Cart.destroy({ where: { variantId } });
+        }
+
         await variant.update({
             sku: sku || variant.sku,
             price: price || variant.price,
