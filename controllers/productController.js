@@ -429,7 +429,6 @@ exports.placeOrder = async (req, res) => {
 
         // 3. Validate items and calculate total
         for (const item of items) {
-            console.log(items.length)
             const { productId, variantId, quantity } = item;
 
             if (!productId || !variantId || !quantity || quantity <= 0) {
@@ -510,7 +509,13 @@ exports.placeOrder = async (req, res) => {
 
         // 7. Clear cart
         await Cart.destroy({
-            where: { userId },
+            where: {
+                userId,
+                [Op.or]: items.map(item => ({
+                    productId: item.productId,
+                    variantId: item.variantId
+                }))
+            },
             transaction
         });
 
