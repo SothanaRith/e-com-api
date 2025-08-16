@@ -7,6 +7,7 @@ const User = require('../models/User');
 const bcrypt = require('bcrypt');
 const Blacklist = require('../models/Blacklist');
 const {OAuth2Client} = require("google-auth-library");
+const { log } = require('console');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
@@ -167,6 +168,15 @@ exports.login = async (req, res) => {
 
     // Save new hashedRefreshToken and tokenVersion
     await user.save();
+    console.log(user.role)
+    if (user.role !== "superAdmin") {
+      if (user.role !== "admin") {
+        return res.status(500).json({
+          success: false,
+          message: 'Error logging in',
+        });
+      }
+    }
 
     return res.status(200).json({
       success: true,
