@@ -17,6 +17,8 @@ const { Op, fn, col, literal, where: sequelizeWhere } = require('sequelize');
 const sequelize = require('../config/db');
 const { Sequelize } = require('sequelize');
 const Notification = require('../models/Notification');
+const ExcelJS = require('exceljs')
+const PDFDocument = require('pdfkit')
 
 function calculateFinalPrice(price, discountType, discountValue, isPromotion) {
     if (!isPromotion || !discountType || discountValue <= 0) return price;
@@ -1958,45 +1960,129 @@ exports.getOverviewStats = async (req, res) => {
 
 exports.getSalesChart = async (req, res) => {
     try {
-        const period = req.query.period || 'monthly'
-        const dateFormat = period === 'daily' ? '%Y-%m-%d' : '%Y-%m'
+        const period = (req.query.period || 'monthly').toLowerCase()
+        const now = new Date()
 
-        const salesData = await Order.findAll({
+        let where = {}
+        let dateFormat = '%Y-%m-%d' // default day buckets
+        let groupExpr = `DATE_FORMAT(createdAt, '${dateFormat}')`
+
+        if (period === 'daily') {
+            // Today only
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0)
+            where.createdAt = { [Op.gte]: start, [Op.lt]: end }
+            dateFormat = '%Y-%m-%d' // single day bucket
+            groupExpr = `DATE_FORMAT(createdAt, '${dateFormat}')`
+        } else if (period === 'monthly') {
+            // This month only (by day)
+            const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0)
+            const end = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0)
+            where.createdAt = { [Op.gte]: start, [Op.lt]: end }
+            dateFormat = '%Y-%m-%d' // daily buckets inside this month
+            groupExpr = `DATE_FORMAT(createdAt, '${dateFormat}')`
+        } else if (period === 'all') {
+            // All time, group by month
+            dateFormat = '%Y-%m'
+            groupExpr = `DATE_FORMAT(createdAt, '${dateFormat}')`
+            // no where filter
+        } else {
+            // fallback to monthly if unknown param
+            const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0)
+            const end = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0)
+            where.createdAt = { [Op.gte]: start, [Op.lt]: end }
+            dateFormat = '%Y-%m-%d'
+            groupExpr = `DATE_FORMAT(createdAt, '${dateFormat}')`
+        }
+
+        const rows = await Order.findAll({
             attributes: [
                 [fn('DATE_FORMAT', col('createdAt'), dateFormat), 'date'],
                 [fn('COUNT', col('id')), 'orders'],
-                [fn('SUM', col('totalAmount')), 'revenue']
+                [fn('SUM', col('totalAmount')), 'revenue'],
             ],
-            group: [literal(`DATE_FORMAT(createdAt, '${dateFormat}')`)],
-            order: [[literal('date'), 'ASC']]
+            where,
+            group: [literal(groupExpr)],
+            order: [[literal('date'), 'ASC']],
+            raw: true,
         })
 
-        res.json(salesData)
+        // normalize number types
+        const salesData = rows.map(r => ({
+            date: r.date,
+            orders: Number(r.orders || 0),
+            revenue: Number(r.revenue || 0),
+        }))
+
+        return res.json(salesData)
     } catch (error) {
         console.error(error)
-        res.status(500).json({ message: 'Server error', error: error.message })
+        return res.status(500).json({ message: 'Server error', error: error.message })
     }
 }
 
 exports.getTopProducts = async (req, res) => {
     try {
-        const topProducts = await OrderProduct.findAll({
+        const limit = parseInt(req.query.limit, 10) || 5;
+
+        // 1) Aggregate sales by productId
+        const topRows = await OrderProduct.findAll({
             attributes: [
                 'productId',
-                [fn('SUM', col('quantity')), 'totalSold']
+                [fn('SUM', col('quantity')), 'totalSold'],
+                [fn('SUM', literal('quantity * price')), 'totalRevenue'],
             ],
-            include: [{ model: Product, attributes: ['name', 'price', 'imageUrl'] }],
-            group: ['productId', 'Product.id'],
+            group: ['productId'],
             order: [[literal('totalSold'), 'DESC']],
-            limit: 5
-        })
+            limit,
+            raw: true,
+        });
 
-        res.json(topProducts)
+        if (!topRows.length) {
+            return res.json([]);
+        }
+
+        // 2) Fetch product data in one shot
+        const ids = topRows.map(r => r.productId);
+        const products = await Product.findAll({
+            where: { id: { [Op.in]: ids } },
+            attributes: ['id', 'name', 'price', 'imageUrl', 'totalStock'],
+            raw: true,
+        });
+
+        // Index products by id
+        const productMap = new Map(products.map(p => [p.id, p]));
+
+        // 3) Merge + keep original order
+        const result = topRows.map(r => {
+            const p = productMap.get(r.productId) || {};
+            let imageUrl = p.imageUrl;
+
+            // Normalize imageUrl (stringified JSON -> array)
+            if (typeof imageUrl === 'string') {
+                try { imageUrl = JSON.parse(imageUrl); } catch { /* keep as-is or set [] */ }
+            }
+
+            return {
+                productId: r.productId,
+                totalSold: Number(r.totalSold) || 0,
+                totalRevenue: Number(r.totalRevenue) || 0,
+                product: {
+                    id: p.id,
+                    name: p.name,
+                    price: p.price,
+                    totalStock: p.totalStock,
+                    imageUrl: imageUrl ?? [],
+                },
+            };
+        });
+
+        return res.json(result);
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ message: 'Server error', error: error.message })
+        console.error(error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
     }
-}
+};
 
 exports.getRecentOrders = async (req, res) => {
     try {
@@ -2047,5 +2133,122 @@ exports.getOrderStatusSummary = async (req, res) => {
     } catch (error) {
         console.error(error)
         res.status(500).json({ message: 'Server error', error: error.message })
+    }
+}
+
+exports.exportOrdersAggregated = async (req, res) => {
+    try {
+        const {
+            period = 'monthly',      // 'daily' | 'monthly'
+            format = 'excel',        // 'excel' | 'pdf'
+            start,
+            end,
+        } = req.query
+
+        // Build date range (defaults)
+        const endDate = end ? new Date(end) : new Date()
+        const startDate = start
+            ? new Date(start)
+            : (period === 'daily'
+                ? new Date(endDate.getTime() - 30 * 24 * 3600 * 1000) // last 30 days
+                : new Date(endDate.getFullYear(), endDate.getMonth() - 11, 1)) // last 12 months
+
+        const dateFormat = period === 'daily' ? '%Y-%m-%d' : '%Y-%m'
+        const labelTitle = period === 'daily' ? 'Date' : 'Month'
+
+        // Aggregate orders by period (count + revenue)
+        const rows = await Order.findAll({
+            attributes: [
+                [fn('DATE_FORMAT', col('createdAt'), dateFormat), 'period'],
+                [fn('COUNT', col('id')), 'orders'],
+                [fn('SUM', col('totalAmount')), 'revenue'],
+            ],
+            where: {
+                createdAt: {
+                    [Op.gte]: startDate,
+                    [Op.lt]: new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1),
+                },
+            },
+            group: [literal(`DATE_FORMAT(createdAt, '${dateFormat}')`)],
+            order: [[literal('period'), 'ASC']],
+            raw: true,
+        })
+
+        // Normalize numbers
+        const data = rows.map(r => ({
+            period: r.period,
+            orders: Number(r.orders || 0),
+            revenue: Number(r.revenue || 0),
+        }))
+
+        if (format === 'excel') {
+            // ---------- Excel (xlsx) ----------
+            const wb = new ExcelJS.Workbook()
+            const ws = wb.addWorksheet('Orders')
+
+            ws.columns = [
+                { header: labelTitle, key: 'period', width: 16 },
+                { header: 'Orders', key: 'orders', width: 12 },
+                { header: 'Revenue', key: 'revenue', width: 16 },
+            ]
+
+            data.forEach(row => ws.addRow(row))
+
+            // Total row
+            ws.addRow({})
+            ws.addRow({
+                period: 'TOTAL',
+                orders: data.reduce((a, b) => a + b.orders, 0),
+                revenue: data.reduce((a, b) => a + b.revenue, 0),
+            })
+
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            res.setHeader('Content-Disposition', `attachment; filename="orders-${period}.xlsx"`)
+
+            await wb.xlsx.write(res)
+            return res.end()
+        }
+
+        // ---------- PDF ----------
+        const doc = new PDFDocument({ margin: 40 })
+        res.setHeader('Content-Type', 'application/pdf')
+        res.setHeader('Content-Disposition', `attachment; filename="orders-${period}.pdf"`)
+        doc.pipe(res)
+
+        doc.fontSize(16).text(`Orders (${period})`, { align: 'left' })
+        doc.moveDown(0.3)
+        doc.fontSize(10).fillColor('#666')
+            .text(`Range: ${startDate.toISOString().slice(0,10)} to ${endDate.toISOString().slice(0,10)}`)
+        doc.moveDown(0.8)
+        doc.fillColor('black')
+
+        // Table header
+        const col1 = 40, col2 = 220, col3 = 340
+        doc.fontSize(12).text(labelTitle, col1).text('Orders', col2).text('Revenue', col3)
+        doc.moveTo(40, doc.y + 4).lineTo(560, doc.y + 4).stroke()
+        doc.moveDown(0.4)
+
+        // Rows
+        doc.fontSize(11)
+        data.forEach(r => {
+            doc.text(r.period, col1)
+                .text(String(r.orders), col2)
+                .text(`${r.revenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, col3)
+        })
+
+        // Total
+        doc.moveDown(0.5)
+        doc.moveTo(40, doc.y).lineTo(560, doc.y).stroke()
+        doc.moveDown(0.4)
+        const tOrders = data.reduce((a, b) => a + b.orders, 0)
+        const tRevenue = data.reduce((a, b) => a + b.revenue, 0)
+        doc.fontSize(12).text('TOTAL', col1)
+            .text(String(tOrders), col2)
+            .text(`${tRevenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, col3)
+
+        doc.end()
+    } catch (error) {
+        console.error('exportOrdersAggregated error:', error)
+        return res.status(500).json({ message: 'Server error', error: error.message })
     }
 }

@@ -53,6 +53,7 @@ router.get('/top-products', productController.getTopProducts)
 router.get('/recent-orders', productController.getRecentOrders)
 router.get('/recent-reviews', productController.getRecentReviews)
 router.get('/order-status-summary', productController.getOrderStatusSummary)
+router.get('/product/orders-export', productController.exportOrdersAggregated)
 
 module.exports = router;
 
