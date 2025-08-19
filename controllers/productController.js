@@ -2252,3 +2252,295 @@ exports.exportOrdersAggregated = async (req, res) => {
         return res.status(500).json({ message: 'Server error', error: error.message })
     }
 }
+
+exports.getLowStock = async (req, res) => {
+  try {
+    // query params
+    const per = (req.query.per || 'product').toLowerCase(); // 'product' | 'variant'
+    const threshold = Number.isFinite(parseInt(req.query.threshold, 10))
+      ? parseInt(req.query.threshold, 10)
+      : 5;
+    const page = parseInt(req.query.page, 10) || 1;
+    const size = parseInt(req.query.size, 10) || 10;
+    const offset = (page - 1) * size;
+    const limit = size;
+
+    // optionally include user context to set wishlist/cart flags (just like your other APIs)
+    const userId = req.query.userId ? parseInt(req.query.userId, 10) : null;
+
+    // optional flags
+    const includeInactive = req.query.includeInactive === 'true';
+    const recomputeTotal = req.query.recomputeTotal === 'true'; // if true, recompute product stock via SUM(variants.stock)
+
+    if (per === 'variant') {
+      // ----- Variant mode: list variants with stock < threshold -----
+      const variantWhere = {
+        stock: { [Op.lt]: threshold },
+      };
+      if (!includeInactive) {
+        // treat null as active by default; only exclude explicit false
+        variantWhere.isActive = { [Op.ne]: false };
+      }
+
+      const { rows, count } = await Variant.findAndCountAll({
+        where: variantWhere,
+        include: [
+          {
+            model: Product,
+            attributes: ['id', 'name', 'price', 'imageUrl', 'totalStock', 'categoryId'],
+            include: [{ model: Category, attributes: { exclude: [] } }],
+          },
+          {
+            model: VariantAttribute,
+            attributes: ['name', 'value'],
+          },
+          ...(userId
+            ? [
+                // cart/wishlist are product-scoped in your codebase; we’ll attach flags on the parent product
+                {
+                  model: Product,
+                  attributes: [],
+                  include: [
+                    {
+                      model: Wishlist,
+                      as: 'Wishlists',
+                      where: { userId },
+                      attributes: ['id'],
+                      required: false,
+                    },
+                    {
+                      model: Cart,
+                      where: { userId },
+                      attributes: ['quantity'],
+                      required: false,
+                    },
+                  ],
+                },
+              ]
+            : []),
+        ],
+        order: [['stock', 'ASC'], ['id', 'ASC']],
+        limit,
+        offset,
+        distinct: true,
+      });
+
+      const data = rows.map((v) => {
+        const variant = v.toJSON();
+        // normalize product imageUrl
+        if (variant.Product) {
+          if (typeof variant.Product.imageUrl === 'string') {
+            try {
+              variant.Product.imageUrl = JSON.parse(variant.Product.imageUrl);
+            } catch {
+              variant.Product.imageUrl = [];
+            }
+          }
+          // basic flags if userId provided (best-effort)
+          if (userId) {
+            const productCarts = variant.Product.Carts || [];
+            const productWishlists = variant.Product.Wishlists || [];
+            variant.Product.isInCart = productCarts.length > 0;
+            variant.Product.cartQuantity = variant.Product.isInCart ? productCarts[0].quantity : 0;
+            variant.Product.isInWishlist = productWishlists.length > 0;
+            delete variant.Product.Carts;
+            delete variant.Product.Wishlists;
+          }
+        }
+        return {
+          variantId: variant.id,
+          sku: variant.sku,
+          title: variant.title,
+          stock: variant.stock,
+          price: variant.price,
+          discountType: variant.discountType,
+          discountValue: variant.discountValue,
+          isPromotion: variant.isPromotion,
+          attributes: (variant.VariantAttributes || []).map((a) => ({ name: a.name, value: a.value })),
+          product: variant.Product || null,
+        };
+      });
+
+      return res.status(200).json({
+        mode: 'variant',
+        threshold,
+        data,
+        pagination: {
+          currentPage: page,
+          pageSize: size,
+          totalItems: count,
+          totalPages: Math.ceil(count / size),
+        },
+      });
+    }
+
+    // ----- Product mode -----
+    if (recomputeTotal) {
+      // Compute SUM(variants.stock) and filter via HAVING
+      const products = await Product.findAll({
+        attributes: [
+          'id',
+          'name',
+          'price',
+          'imageUrl',
+          'categoryId',
+          [fn('COALESCE', fn('SUM', col('Variants.stock')), 0), 'computedTotalStock'],
+        ],
+        include: [
+          { model: Category, attributes: { exclude: [] } },
+          {
+            model: Variant,
+            attributes: [], // we only need the SUM
+            ...(includeInactive ? {} : { where: { isActive: { [Op.ne]: false } }, required: false }),
+          },
+          ...(userId
+            ? [
+                {
+                  model: Wishlist,
+                  as: 'Wishlists',
+                  where: { userId },
+                  required: false,
+                  attributes: ['id'],
+                },
+                {
+                  model: Cart,
+                  where: { userId },
+                  required: false,
+                  attributes: ['quantity'],
+                },
+              ]
+            : []),
+        ],
+        group: ['Product.id', 'Category.id', ...(userId ? ['Wishlists.id', 'Carts.id'] : [])],
+        having: sequelizeWhere(fn('COALESCE', fn('SUM', col('Variants.stock')), 0), { [Op.lt]: threshold }),
+        order: [[literal('computedTotalStock'), 'ASC'], ['id', 'ASC']],
+        limit,
+        offset,
+        subQuery: false,
+      });
+
+      // count for pagination: run a separate count query on ids
+      const countRows = await Product.findAll({
+        attributes: ['id'],
+        include: [
+          {
+            model: Variant,
+            attributes: [],
+            ...(includeInactive ? {} : { where: { isActive: { [Op.ne]: false } }, required: false }),
+          },
+        ],
+        group: ['Product.id'],
+        having: sequelizeWhere(fn('COALESCE', fn('SUM', col('Variants.stock')), 0), { [Op.lt]: threshold }),
+        raw: true,
+      });
+
+      const formatted = products.map((p) => {
+        const prod = p.toJSON();
+        if (typeof prod.imageUrl === 'string') {
+          try {
+            prod.imageUrl = JSON.parse(prod.imageUrl);
+          } catch {
+            prod.imageUrl = [];
+          }
+        }
+        prod.category = prod.Category || null;
+        delete prod.Category;
+        if (userId) {
+          prod.isInWishlist = (prod.Wishlists || []).length > 0;
+          const carts = prod.Carts || [];
+          prod.isInCart = carts.length > 0;
+          prod.cartQuantity = prod.isInCart ? carts[0].quantity : 0;
+          delete prod.Wishlists;
+          delete prod.Carts;
+        }
+        // expose computed stock
+        prod.totalStock = Number(prod.computedTotalStock || 0);
+        delete prod.computedTotalStock;
+        return prod;
+      });
+
+      return res.status(200).json({
+        mode: 'product',
+        recomputeTotal: true,
+        threshold,
+        data: formatted,
+        pagination: {
+          currentPage: page,
+          pageSize: size,
+          totalItems: countRows.length,
+          totalPages: Math.ceil(countRows.length / size),
+        },
+      });
+    } else {
+      // Use Product.totalStock field (fast path)
+      const where = { totalStock: { [Op.lt]: threshold } };
+
+      const totalItems = await Product.count({ where });
+
+      const products = await Product.findAll({
+        where,
+        include: [
+          { model: Category, attributes: { exclude: [] } },
+          ...(userId
+            ? [
+                {
+                  model: Wishlist,
+                  as: 'Wishlists',
+                  where: { userId },
+                  required: false,
+                  attributes: ['id'],
+                },
+                {
+                  model: Cart,
+                  where: { userId },
+                  required: false,
+                  attributes: ['quantity'],
+                },
+              ]
+            : []),
+        ],
+        order: [['totalStock', 'ASC'], ['id', 'ASC']],
+        limit,
+        offset,
+      });
+
+      const formatted = products.map((p) => {
+        const prod = p.toJSON();
+        if (typeof prod.imageUrl === 'string') {
+          try {
+            prod.imageUrl = JSON.parse(prod.imageUrl);
+          } catch {
+            prod.imageUrl = [];
+          }
+        }
+        prod.category = prod.Category || null;
+        delete prod.Category;
+        if (userId) {
+          prod.isInWishlist = (prod.Wishlists || []).length > 0;
+          const carts = prod.Carts || [];
+          prod.isInCart = carts.length > 0;
+          prod.cartQuantity = prod.isInCart ? carts[0].quantity : 0;
+          delete prod.Wishlists;
+          delete prod.Carts;
+        }
+        return prod;
+      });
+
+      return res.status(200).json({
+        mode: 'product',
+        recomputeTotal: false,
+        threshold,
+        data: formatted,
+        pagination: {
+          currentPage: page,
+          pageSize: size,
+          totalItems,
+          totalPages: Math.ceil(totalItems / size),
+        },
+      });
+    }
+  } catch (error) {
+    console.error('getLowStock error:', error);
+    return res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
