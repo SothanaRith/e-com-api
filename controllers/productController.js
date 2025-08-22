@@ -34,6 +34,28 @@ function calculateFinalPrice(price, discountType, discountValue, isPromotion) {
     return price;
 }
 
+// --- Helpers for optional userId + date range ---
+function getOptionalUserId(req) {
+    // Prefer query.userId, fallback to route param, else null
+    return req.query.userId ?? req.params.userId ?? null;
+}
+
+function buildCreatedAtRange(start, end) {
+    const where = {};
+    if (start || end) {
+        const range = {};
+        if (start) range[Op.gte] = new Date(start);
+        if (end) {
+            // Inclusive end: use < next day 00:00
+            const e = new Date(end);
+            const next = new Date(e.getFullYear(), e.getMonth(), e.getDate() + 1, 0, 0, 0);
+            range[Op.lt] = next;
+        }
+        where.createdAt = range;
+    }
+    return where;
+}
+
 exports.createProduct = async (req, res) => {
     try {
         const {
@@ -1633,64 +1655,60 @@ exports.removeFromWishlist = async (req, res) => {
 
 exports.getAdminGroupedOrders = async (req, res) => {
     try {
-        const { searchQuery, itemsPerPage = 10, page = 1, sortBy = 'createdAt', orderBy = 'DESC' } = req.query;
+        const {
+            searchQuery,
+            itemsPerPage = 10,
+            page = 1,
+            sortBy = 'createdAt',
+            orderBy = 'DESC',
+            startDate,
+            endDate,
+        } = req.query;
+
+        const optUserId = getOptionalUserId(req);
         const statuses = ['pending', 'delivery', 'delivered', 'completed', 'cancelled'];
 
-        // Prepare an object to hold grouped results
         const result = {};
-
-        // Convert pagination values to integers
-        const limit = parseInt(itemsPerPage);
-        const offset = (parseInt(page) - 1) * limit;
-
-        // For pagination: calculate the total number of orders for each status
-        const paginationInfo = {};
+        const limit = parseInt(itemsPerPage, 10);
+        const offset = (parseInt(page, 10) - 1) * limit;
+        const dateWhere = buildCreatedAtRange(startDate, endDate);
 
         for (const status of statuses) {
-            // First, get the count of orders for pagination
+            // Count for pagination
             const totalCount = await Order.count({
                 where: {
                     status,
-                    ...(searchQuery ? {
-                        [Op.or]: [
-                            { 'id': { [Op.like]: `%${searchQuery}%` } }
-                        ]
-                    } : {})
+                    ...dateWhere,
+                    ...(optUserId ? { userId: optUserId } : {}),
+                    ...(searchQuery
+                        ? { [Op.or]: [{ id: { [Op.like]: `%${searchQuery}%` } }] }
+                        : {}),
                 },
             });
 
-            // Calculate total pages
             const totalPages = Math.ceil(totalCount / limit);
 
-            // Get the orders for the current page
+            // Page data
             const orders = await Order.findAll({
                 where: {
                     status,
-                    ...(searchQuery ? {
-                        [Op.or]: [
-                            { 'id': { [Op.like]: `%${searchQuery}%` } }
-                        ]
-                    } : {})
+                    ...dateWhere,
+                    ...(optUserId ? { userId: optUserId } : {}),
+                    ...(searchQuery
+                        ? { [Op.or]: [{ id: { [Op.like]: `%${searchQuery}%` } }] }
+                        : {}),
                 },
                 include: [
-                    {
-                        model: User,
-                        attributes: ['id', 'name', 'email', 'coverImage']
-                    },
+                    { model: User, attributes: ['id', 'name', 'email', 'coverImage'] },
                     {
                         model: OrderProduct,
                         as: 'orderItems',
-                        include: [
-                            {
-                                model: Product,
-                                attributes: ['id', 'name', 'price', 'imageUrl']
-                            }
-                        ]
+                        include: [{ model: Product, attributes: ['id', 'name', 'price', 'imageUrl'] }],
                     },
                     {
                         model: DeliveryAddress,
                         as: 'address',
-                        attributes: ['id', 'fullName', 'phoneNumber', 'street']
+                        attributes: ['id', 'fullName', 'phoneNumber', 'street'],
                     },
                     {
                         model: OrderTracking,
@@ -1699,30 +1717,25 @@ exports.getAdminGroupedOrders = async (req, res) => {
                         separate: true,
                         order: [['timestamp', 'ASC']],
                     },
-                    {
-                        model: Transaction,
-                        attributes: ['id', 'amount', 'status', 'paymentType']
-                    }
+                    { model: Transaction, attributes: ['id', 'amount', 'status', 'paymentType'] },
                 ],
                 order: [[sortBy, orderBy]],
-                limit, // Correctly pass the limit
-                offset // Correctly calculate the offset
+                limit,
+                offset,
             });
 
-            // Store the result for each status and its pagination info
             result[status] = {
                 orders,
                 pagination: {
                     total: totalCount,
-                    page: parseInt(page),
+                    page: parseInt(page, 10),
                     totalPages,
-                    itemsPerPage: limit
-                }
+                    itemsPerPage: limit,
+                },
             };
         }
 
         return res.status(200).json(result);
-
     } catch (error) {
         console.error('Error grouping orders for admin:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
