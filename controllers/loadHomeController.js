@@ -10,16 +10,16 @@ exports.loadHome = async (req, res) => {
     const limit = size;
     const { userId } = req.query;
 
-    // Fetch categories
+    // --- Categories ---
     const categories = await Category.findAll();
 
-    // Fetch products, with conditional inclusion of Wishlist and Cart for user
+    // --- Products ---
     const products = await Product.findAll({
       limit,
       offset,
       order: [["createdAt", "DESC"]],
       include: [
-        { model: Category, attributes: {exclude: []} },
+        { model: Category, attributes: { exclude: [] } },
         ...(userId ? [{
           model: Wishlist,
           as: 'Wishlists',
@@ -29,29 +29,30 @@ exports.loadHome = async (req, res) => {
         }] : []),
         ...(userId ? [{
           model: Cart,
-          where: { userId },
+          as: 'Carts',
           attributes: ['quantity'],
+          where: { userId },
           required: false
         }] : [])
       ]
     });
 
-    // Process products to add necessary fields like 'isInWishlist' and 'isInCart'
-    const processedProducts = products.map(product => {
-      const prod = product.toJSON();
+    const processedProducts = products.map(p => {
+      const prod = p.toJSON();
 
       // Parse imageUrl
       if (typeof prod.imageUrl === 'string') {
         try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
       }
 
-      // Set isInWishlist
-      prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
+      // Wishlist
+      prod.isInWishlist = userId ? (prod.Wishlists?.length > 0) : false;
       delete prod.Wishlists;
 
+      // Category
       prod.category = prod.Category || null;
 
-      // Set cart info
+      // Cart
       if (userId) {
         if (prod.Carts && prod.Carts.length > 0) {
           prod.isInCart = true;
@@ -66,18 +67,14 @@ exports.loadHome = async (req, res) => {
       return prod;
     });
 
-        // Fetch the total unread notifications for the user
-    let unreadNotificationsCount = 0;
-    if (userId) {
-      unreadNotificationsCount = await Notification.count({
-        where: {
-          userId,
-          status: 'unread', // Assuming the status of unread notifications is stored as 'unread'
-        }
-      });
-    }
+    // --- Notifications ---
+    const unreadNotificationsCount = userId
+        ? await Notification.count({
+          where: { userId, status: 'unread' }
+        })
+        : 0;
 
-    // Fetch latest 10 products by createdAt
+    // --- Latest Products ---
     const latestProductsRaw = await Product.findAll({
       limit: 10,
       order: [["createdAt", "DESC"]],
@@ -88,32 +85,30 @@ exports.loadHome = async (req, res) => {
           as: 'Wishlists',
           attributes: ['id'],
           where: { userId },
-          required: false,
+          required: false
         }] : []),
         ...(userId ? [{
           model: Cart,
-          where: { userId },
+          as: 'Carts',
           attributes: ['quantity'],
-          required: false,
+          where: { userId },
+          required: false
         }] : [])
       ]
     });
 
-    const latestProducts = latestProductsRaw.map(product => {
-      const prod = product.toJSON();
+    const latestProducts = latestProductsRaw.map(p => {
+      const prod = p.toJSON();
 
-      // Parse imageUrl
       if (typeof prod.imageUrl === 'string') {
         try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
       }
 
-      // Wishlist info
-      prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
+      prod.isInWishlist = userId ? (prod.Wishlists?.length > 0) : false;
       delete prod.Wishlists;
 
       prod.category = prod.Category || null;
 
-      // Cart info
       if (userId) {
         if (prod.Carts && prod.Carts.length > 0) {
           prod.isInCart = true;
@@ -128,15 +123,17 @@ exports.loadHome = async (req, res) => {
       return prod;
     });
 
-    // Fetch active slides
-    const slides = await Slide.findAll({ where: { isActive: true }, order: [["order", "ASC"]] });
+    // --- Slides ---
+    const slides = await Slide.findAll({
+      where: { isActive: true },
+      order: [["order", "ASC"]]
+    });
 
-    // Return categories, products, and slides in the response
     return res.status(200).json(successResponse("Home data fetched successfully", {
       categories,
       products: processedProducts,
       unreadNotificationsCount,
-      slides, // Include slides in the response
+      slides,
       latestProducts,
       pagination: {
         currentPage: page,
