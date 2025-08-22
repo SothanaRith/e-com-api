@@ -153,65 +153,71 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
     try {
-        const { userId } = req.params;
+        // userId optional: from params OR query
+        const rawUserId = req.params.userId ?? req.query.userId ?? null;
+        const userId = rawUserId && /^\d+$/.test(String(rawUserId)) ? Number(rawUserId) : null;
 
-        // Pagination input with defaults
-        const page = parseInt(req.query.page) || 1;
-        const size = parseInt(req.query.size) || 10;
+        // Pagination with sane defaults
+        const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+        const size = Math.max(parseInt(req.query.size, 10) || 10, 1);
         const offset = (page - 1) * size;
         const limit = size;
 
-        // Count total products (for pagination metadata)
+        // Count total products (not affected by wishlist/cart joins)
         const totalProducts = await Product.count();
 
-        const products = await Product.findAll({
-            include: [
-                { model: Category, attributes: {exclude: []} },
-                ...(userId ? [{
+        // Build conditional user includes
+        const userIncludes = userId
+            ? [
+                {
                     model: Wishlist,
                     as: 'Wishlists',
                     where: { userId },
                     required: false,
-                    attributes: ['id']
-                }] : []),
-                ...(userId ? [{
+                    attributes: ['id'],
+                },
+                {
                     model: Cart,
+                    as: 'Carts', // ensure alias matches your association
                     where: { userId },
                     required: false,
-                    attributes: ['quantity']
-                }] : [])
+                    attributes: ['quantity'],
+                },
+            ]
+            : [];
+
+        const products = await Product.findAll({
+            include: [
+                { model: Category, attributes: { exclude: [] }, required: false },
+                ...userIncludes,
             ],
             order: [['createdAt', 'DESC']],
             offset,
             limit,
         });
 
-        const processedProducts = products.map(product => {
-            const prod = product.toJSON();
+        const processedProducts = products.map(p => {
+            const prod = p.toJSON();
 
-            // Flatten category
-            prod.categoryId = prod.Category?.id || null;
-            prod.category = prod.Category || null;
+            // Flatten / keep category
+            prod.categoryId = prod.Category?.id ?? null;
+            prod.category = prod.Category ?? null;
             delete prod.Category;
 
-            // Parse imageUrl if needed
+            // Parse imageUrl if it's a JSON string
             if (typeof prod.imageUrl === 'string') {
                 try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
             }
 
             // Wishlist flag
-            prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
+            prod.isInWishlist = userId ? (prod.Wishlists?.length > 0) : false;
             delete prod.Wishlists;
 
             // Cart flags
             if (userId) {
-                if (prod.Carts && prod.Carts.length > 0) {
-                    prod.isInCart = true;
-                    prod.cartQuantity = prod.Carts[0].quantity;
-                } else {
-                    prod.isInCart = false;
-                    prod.cartQuantity = 0;
-                }
+                const hasCart = Array.isArray(prod.Carts) && prod.Carts.length > 0;
+                prod.isInCart = hasCart;
+                prod.cartQuantity = hasCart ? prod.Carts[0].quantity : 0;
                 delete prod.Carts;
             }
 
@@ -227,9 +233,8 @@ exports.getAllProducts = async (req, res) => {
                 totalPages: Math.ceil(totalProducts / size),
             },
         });
-
     } catch (error) {
-        console.error(error);
+        console.error('Error in getAllProducts:', error);
         return res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 };
@@ -337,91 +342,105 @@ exports.updateProduct = async (req, res) => {
 
 exports.getProductById = async (req, res) => {
     try {
-        const { id, userId } = req.params;
+        const { id } = req.params;
+
+        // userId is optional: accept from params OR query
+        const rawUserId = req.params.userId ?? req.query.userId ?? null;
+        const userId = rawUserId && /^\d+$/.test(String(rawUserId)) ? Number(rawUserId) : null;
+
+        if (!id || Number.isNaN(Number(id))) {
+            return res.status(400).json(failResponse("Invalid product ID"));
+        }
+
+        // Build conditional user includes
+        const userIncludes = userId
+            ? [
+                {
+                    model: Wishlist,
+                    as: 'Wishlists',
+                    where: { userId },
+                    attributes: ['id'],
+                    required: false,
+                },
+                {
+                    model: Cart,
+                    as: 'Carts',              // ensure this matches your association alias
+                    where: { userId },
+                    attributes: ['quantity'],
+                    required: false,
+                },
+            ]
+            : [];
 
         const product = await Product.findByPk(id, {
             include: [
-                { model: Category, attributes: { exclude: [] } },
+                { model: Category, attributes: { exclude: [] }, required: false },
                 {
                     model: Variant,
                     attributes: { exclude: [] },
-                    include: [{ model: VariantAttribute, attributes: ['name', 'value'] }]
+                    required: false,
+                    include: [
+                        { model: VariantAttribute, attributes: ['name', 'value'], required: false },
+                    ],
                 },
                 {
                     model: Review,
                     attributes: ['id', 'rating', 'comment', 'userId', 'imageUrl'],
                     required: false,
-                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'] }]
+                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'], required: false }],
                 },
                 {
                     model: Product,
                     as: 'RelatedProducts',
                     attributes: ['id', 'name', 'price', 'imageUrl', 'totalStock'],
-                    through: { attributes: [] }
+                    through: { attributes: [] },
+                    required: false,
                 },
-                ...(userId ? [{
-                    model: Wishlist,
-                    as: 'Wishlists',
-                    where: { userId },
-                    attributes: ['id'],
-                    required: false
-                }] : []),
-                ...(userId ? [{
-                    model: Cart,
-                    where: { userId },
-                    attributes: ['quantity'],
-                    required: false
-                }] : [])
-            ]
+                ...userIncludes,
+            ],
         });
 
-        if (!product) return res.status(404).json({ message: "Product not found" });
+        if (!product) {
+            return res.status(404).json(failResponse("Product not found"));
+        }
 
         const prod = product.toJSON();
 
+        // Category
         prod.category = prod.Category || null;
         delete prod.Category;
 
-        // Parse imageUrl of main product
+        // Parse main product imageUrl if stored as JSON string
         if (typeof prod.imageUrl === 'string') {
             try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch { prod.imageUrl = []; }
         }
 
         // Wishlist flag
-        prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
+        prod.isInWishlist = userId ? (prod.Wishlists?.length > 0) : false;
         delete prod.Wishlists;
 
         // Cart info
         if (userId) {
-            if (prod.Carts && prod.Carts.length > 0) {
-                prod.isInCart = true;
-                prod.cartQuantity = prod.Carts[0].quantity;
-            } else {
-                prod.isInCart = false;
-                prod.cartQuantity = 0;
-            }
+            const hasCart = Array.isArray(prod.Carts) && prod.Carts.length > 0;
+            prod.isInCart = hasCart;
+            prod.cartQuantity = hasCart ? prod.Carts[0].quantity : 0;
             delete prod.Carts;
         }
 
-        // Parse imageUrl for related products
-        if (prod.RelatedProducts && Array.isArray(prod.RelatedProducts)) {
-            prod.RelatedProducts = prod.RelatedProducts.map(relProd => {
-                if (typeof relProd.imageUrl === 'string') {
-                    try {
-                        relProd.imageUrl = JSON.parse(relProd.imageUrl);
-                    } catch {
-                        relProd.imageUrl = [];
-                    }
+        // Parse imageUrl for related products when saved as JSON string
+        if (Array.isArray(prod.RelatedProducts)) {
+            prod.RelatedProducts = prod.RelatedProducts.map(rp => {
+                if (typeof rp.imageUrl === 'string') {
+                    try { rp.imageUrl = JSON.parse(rp.imageUrl); } catch { rp.imageUrl = []; }
                 }
-                return relProd;
+                return rp;
             });
         }
 
-        return res.status(200).json(prod);
-
+        return res.status(200).json(successResponse("Product fetched successfully", prod));
     } catch (error) {
         console.error("Error fetching product:", error);
-        res.status(500).json({ message: "Internal server error", error: error.message });
+        return res.status(500).json(failResponse("Internal server error", error.message));
     }
 };
 
@@ -1031,7 +1050,10 @@ exports.getProductReviews = async (req, res) => {
 
 exports.searchProducts = async (req, res) => {
     try {
-        const { userId } = req.params;
+        // --- userId optional: accept from params OR query ---
+        const rawUserId = req.params.userId ?? req.query.userId ?? null;
+        const userId = rawUserId && /^\d+$/.test(String(rawUserId)) ? Number(rawUserId) : null;
+
         const {
             query,
             categoryId,
@@ -1043,9 +1065,10 @@ exports.searchProducts = async (req, res) => {
             size = 10,
         } = req.query;
 
-        const limit = parseInt(size, 10);
-        const offset = (parseInt(page, 10) - 1) * limit;
+        const limit = Math.max(parseInt(size, 10) || 10, 1);
+        const offset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * limit;
 
+        // ---- Base where (Product) ----
         const productWhere = {};
 
         if (query && query.trim()) {
@@ -1053,118 +1076,119 @@ exports.searchProducts = async (req, res) => {
         }
 
         if (categoryId) {
-            const categoryIds = categoryId.split(',').map(id => parseInt(id.trim(), 10));
-            productWhere.categoryId = { [Op.in]: categoryIds };
+            const categoryIds = categoryId
+                .split(',')
+                .map(id => parseInt(id.trim(), 10))
+                .filter(n => !Number.isNaN(n));
+            if (categoryIds.length) {
+                productWhere.categoryId = { [Op.in]: categoryIds };
+            }
         }
 
         if (minPrice !== undefined || maxPrice !== undefined) {
-            productWhere.price = {};
-            if (minPrice !== undefined && minPrice !== '') {
-                productWhere.price[Op.gte] = parseFloat(minPrice);
-            }
-            if (maxPrice !== undefined && maxPrice !== '') {
-                productWhere.price[Op.lte] = parseFloat(maxPrice);
-            }
+            const priceConditions = {};
+            const minP = parseFloat(minPrice);
+            const maxP = parseFloat(maxPrice);
+            if (!Number.isNaN(minP)) priceConditions[Op.gte] = minP;
+            if (!Number.isNaN(maxP)) priceConditions[Op.lte] = maxP;
+            if (Object.keys(priceConditions).length) productWhere.price = priceConditions;
         }
 
-        // Base includes for all queries, includes Cart if userId provided
+        // ---- Base includes ----
         const includeModels = [
-            { model: Category, attributes: {exclude: []} },
+            { model: Category, attributes: { exclude: [] }, required: false },
+            // Attach Wishlist/Cart only if userId provided
             ...(userId ? [{
                 model: Wishlist,
                 as: 'Wishlists',
                 where: { userId },
                 required: false,
-                attributes: ['id']
+                attributes: ['id'],
             }] : []),
             ...(userId ? [{
                 model: Cart,
+                as: 'Carts',
                 where: { userId },
                 required: false,
-                attributes: ['quantity']
-            }] : [])
+                attributes: ['quantity'],
+            }] : []),
         ];
 
+        // variantSku filter (joins Variants only when needed)
+        if (variantSku && variantSku.trim()) {
+            // Filter via association field
+            productWhere['$Variants.sku$'] = { [Op.like]: `%${variantSku.trim()}%` };
+            includeModels.push({
+                model: Variant,
+                as: 'Variants',               // <-- ensure alias matches your association
+                required: true,               // required because we are filtering on this join
+                attributes: ['id', 'sku'],
+            });
+        } else {
+            // Optional, non-filter include (if you still want it, keep required:false)
+            includeModels.push({
+                model: Variant,
+                as: 'Variants',
+                required: false,
+                attributes: ['id', 'sku'],
+            });
+        }
+
+        // --- Handle minRating with a two-step approach (avoid GROUP BY + user joins headaches) ---
         let totalItems = 0;
-        let products;
+        let products = [];
 
         if (minRating !== undefined && minRating !== '') {
             const minRatingFloat = parseFloat(minRating);
+            if (Number.isNaN(minRatingFloat)) {
+                return res.status(400).json({ message: 'Invalid minRating' });
+            }
 
-            // Count total items with avg rating filter
-            const productsWithAvgRating = await Product.findAll({
+            // Step 1: find product IDs that satisfy the rating threshold
+            const ratingRows = await Product.findAll({
                 where: productWhere,
-                include: [
-                    {
-                        model: Review,
-                        attributes: []
-                    }
-                ],
+                include: [{ model: Review, attributes: [], required: true }],
                 attributes: [
                     'id',
-                    [fn('AVG', col('Reviews.rating')), 'avgRating']
+                    [fn('AVG', col('Reviews.rating')), 'avgRating'],
                 ],
                 group: ['Product.id'],
                 having: sequelizeWhere(fn('AVG', col('Reviews.rating')), { [Op.gte]: minRatingFloat }),
+                raw: true,
             });
 
-            totalItems = productsWithAvgRating.length;
+            const filteredIds = ratingRows.map(r => r.id);
+            totalItems = filteredIds.length;
 
-            // Query products with avg rating filter plus Wishlist and Cart includes if userId
-            products = await Product.findAll({
-                where: productWhere,
-                include: [
-                    { model: Category, attributes: ['id', 'name'] },
-                    ...(userId ? [{
-                        model: Wishlist,
-                        as: 'Wishlists',
-                        where: { userId },
-                        required: false,
-                        attributes: ['id']
-                    }] : []),
-                    ...(userId ? [{
-                        model: Cart,
-                        where: { userId },
-                        required: false,
-                        attributes: ['quantity']
-                    }] : []),
-                    {
-                        model: Review,
-                        attributes: [],
-                        required: true,
-                    }
-                ],
-                attributes: {
+            if (totalItems > 0) {
+                // Step 2: fetch paginated products with user-specific includes; compute avgRating as a separate field if needed
+                products = await Product.findAll({
+                    where: { ...productWhere, id: { [Op.in]: filteredIds } },
                     include: [
-                        [fn('AVG', col('Reviews.rating')), 'avgRating']
-                    ]
-                },
-                group: ['Product.id', 'Category.id', ...(userId ? ['Wishlists.id', 'Carts.id'] : [])],
-                having: sequelizeWhere(fn('AVG', col('Reviews.rating')), { [Op.gte]: minRatingFloat }),
-                order: [['createdAt', 'DESC']],
-                limit,
-                offset,
-                subQuery: false // Important for pagination with grouping
-            });
-
+                        ...includeModels,
+                        // lightweight include to compute avg in attributes:
+                        { model: Review, attributes: [], required: false },
+                    ],
+                    attributes: {
+                        include: [[fn('AVG', col('Reviews.rating')), 'avgRating']],
+                    },
+                    group: ['Product.id', 'Category.id', ...(userId ? [] : []), /* keep group minimal */],
+                    order: [['createdAt', 'DESC']],
+                    limit,
+                    offset,
+                    subQuery: false,
+                });
+            }
         } else {
-            // Without rating filter, count total items normally
+            // No rating filter: simple count and fetch
             totalItems = await Product.count({
                 where: productWhere,
-                include: [
-                    ...(userId ? [{
-                        model: Wishlist,
-                        as: 'Wishlists',
-                        where: { userId },
-                        required: false,
-                        attributes: [],
-                    }] : [])
-                ],
                 distinct: true,
-                col: 'id',
+                col: 'Product.id',
+                // Don't include Wishlist/Cart in count to avoid changing cardinality
+                include: includeModels.filter(i => !['Wishlists', 'Carts'].includes(i.as)),
             });
 
-            // Query products without rating filter
             products = await Product.findAll({
                 where: productWhere,
                 include: includeModels,
@@ -1174,33 +1198,36 @@ exports.searchProducts = async (req, res) => {
             });
         }
 
+        // ---- Shape output ----
         const formatted = products.map(product => {
             const prod = product.toJSON();
 
+            // Category
             prod.categoryId = prod.Category?.id || null;
             prod.category = prod.Category || null;
             delete prod.Category;
 
+            // Parse imageUrl if JSON string
             if (typeof prod.imageUrl === 'string') {
                 try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch {}
             }
 
-            prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
+            // Wishlist flag
+            prod.isInWishlist = userId ? (prod.Wishlists?.length > 0) : false;
             delete prod.Wishlists;
 
+            // Cart flags
             if (userId) {
-                if (prod.Carts && prod.Carts.length > 0) {
-                    prod.isInCart = true;
-                    prod.cartQuantity = prod.Carts[0].quantity;
-                } else {
-                    prod.isInCart = false;
-                    prod.cartQuantity = 0;
-                }
+                const hasCart = Array.isArray(prod.Carts) && prod.Carts.length > 0;
+                prod.isInCart = hasCart;
+                prod.cartQuantity = hasCart ? prod.Carts[0].quantity : 0;
                 delete prod.Carts;
             }
 
-            if (prod.avgRating !== undefined) {
-                prod.avgRating = parseFloat(prod.avgRating).toFixed(2);
+            // avgRating normalization (may exist when minRating branch used)
+            if (prod.avgRating !== undefined && prod.avgRating !== null) {
+                const n = Number(prod.avgRating);
+                if (!Number.isNaN(n)) prod.avgRating = n.toFixed(2);
             }
 
             return prod;
@@ -1209,7 +1236,7 @@ exports.searchProducts = async (req, res) => {
         return res.status(200).json({
             data: formatted,
             pagination: {
-                currentPage: parseInt(page, 10),
+                currentPage: Math.max(parseInt(page, 10) || 1, 1),
                 pageSize: limit,
                 totalItems,
                 totalPages: Math.ceil(totalItems / limit),
