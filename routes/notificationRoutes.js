@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createNotification, getNotifications, updateNotification, deleteNotification, getGlobalNotifications } = require('../controllers/notificationController');
+const { createNotification, getNotifications, updateNotification, deleteNotification, getGlobalNotifications, getUsersWithNotifications } = require('../controllers/notificationController');
 
 // Create a new notification
 router.post('/notifications', createNotification);
@@ -15,5 +15,8 @@ router.put('/notifications/:id', updateNotification);
 router.delete('/notifications/:id', deleteNotification);
 
 router.get('/notifications-global', getGlobalNotifications);
+
+router.get('/notifications/users-with-notifications', getUsersWithNotifications);
+
 
 module.exports = router;
