@@ -164,7 +164,13 @@ exports.login = async (req, res) => {
     // Generate new Tokens
     const { accessToken, refreshToken } = await generateTokens(user);
 
-    user.isVerify = false;
+    console.log(req.query.type)
+    if(req.query.type === 'mobile') {
+      user.isVerify = true;
+
+    } else {
+      user.isVerify = false;
+    }
 
     // Save new hashedRefreshToken and tokenVersion
     await user.save();
