@@ -30,7 +30,6 @@ function calculateFinalPrice(price, discountType, discountValue, isPromotion) {
     if (discountType === 'percent') {
         return parseFloat((price * (1 - discountValue / 100)).toFixed(2));
     }
-
     return price;
 }
 
@@ -1772,8 +1771,7 @@ exports.getAdminGroupedOrders = async (req, res) => {
 exports.getOrdersByUserAndStatus = async (req, res) => {
     try {
         const { userId } = req.params;  // Get userId from URL parameters
-        const { status } = req.query;   // Get the status from query params (e.g., 'pending', 'delivered')
-        const { searchQuery, itemsPerPage = 10, page = 1, sortBy = 'createdAt', orderBy = 'DESC' } = req.query;
+        const { status, startDate, endDate, searchQuery, itemsPerPage = 10, page = 1, sortBy = 'createdAt', orderBy = 'DESC' } = req.query;
 
         if (!status) {
             return res.status(400).json({ message: "Status is required" });
@@ -1781,44 +1779,43 @@ exports.getOrdersByUserAndStatus = async (req, res) => {
 
         const allowedStatuses = ['pending', 'delivery', 'delivered', 'completed', 'cancelled'];
 
-        // Check if the provided status is valid
         if (!allowedStatuses.includes(status)) {
             return res.status(400).json({ message: "Invalid status" });
         }
 
-        // Convert pagination values to integers
+        // Pagination
         const limit = parseInt(itemsPerPage);
         const offset = (parseInt(page) - 1) * limit;
 
-        // Get the count of orders for pagination
-        const totalCount = await Order.count({
-            where: {
-                userId,
-                status,
-                ...(searchQuery ? {
-                    [Op.or]: [
-                        { 'id': { [Op.like]: `%${searchQuery}%` } },
-                        { 'status': { [Op.like]: `%${searchQuery}%` } }
-                    ]
-                } : {})
-            },
-        });
+        // Build where conditions
+        const whereCondition = {
+            userId,
+            status,
+            ...(searchQuery ? {
+                [Op.or]: [
+                    { id: { [Op.like]: `%${searchQuery}%` } },
+                    { status: { [Op.like]: `%${searchQuery}%` } }
+                ]
+            } : {}),
+            ...(startDate && endDate ? {
+                createdAt: {
+                    [Op.between]: [new Date(startDate), new Date(endDate)]
+                }
+            } : startDate ? {
+                createdAt: { [Op.gte]: new Date(startDate) }
+            } : endDate ? {
+                createdAt: { [Op.lte]: new Date(endDate) }
+            } : {})
+        };
 
-        // Calculate total pages
+        // Count for pagination
+        const totalCount = await Order.count({ where: whereCondition });
+
         const totalPages = Math.ceil(totalCount / limit);
 
-        // Get the orders for the specified status
+        // Fetch data
         const orders = await Order.findAll({
-            where: {
-                userId,
-                status,
-                ...(searchQuery ? {
-                    [Op.or]: [
-                        { 'id': { [Op.like]: `%${searchQuery}%` } },
-                        { 'status': { [Op.like]: `%${searchQuery}%` } }
-                    ]
-                } : {})
-            },
+            where: whereCondition,
             include: [
                 {
                     model: User,
@@ -1860,11 +1857,11 @@ exports.getOrdersByUserAndStatus = async (req, res) => {
                 }
             ],
             order: [[sortBy, orderBy]],
-            limit, // Correctly pass the limit
-            offset // Correctly calculate the offset
+            limit,
+            offset
         });
 
-        // Map and format the result to match your response structure
+        // Format result
         const formattedOrders = orders.map(order => ({
             id: order.id,
             orderId: order.id,
@@ -1931,16 +1928,15 @@ exports.getOrdersByUserAndStatus = async (req, res) => {
             }
         }));
 
-        // return res.status(200).json({
-        //     orders: formattedOrders,
-        //     pagination: {
-        //         total: totalCount,
-        //         page: parseInt(page),
-        //         totalPages,
-        //         itemsPerPage: limit
-        //     }
-        // });
-        return res.status(200).json(formattedOrders);
+        return res.status(200).json({
+            orders: formattedOrders,
+            pagination: {
+                total: totalCount,
+                page: parseInt(page),
+                totalPages,
+                itemsPerPage: limit
+            }
+        });
 
     } catch (error) {
         console.error('Error fetching orders by user and status:', error);
