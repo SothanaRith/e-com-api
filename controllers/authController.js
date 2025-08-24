@@ -168,14 +168,12 @@ exports.login = async (req, res) => {
 
     // Save new hashedRefreshToken and tokenVersion
     await user.save();
-    console.log(user.role)
-    if (user.role !== "superAdmin") {
-      if (user.role !== "admin") {
-        return res.status(500).json({
-          success: false,
-          message: 'Error logging in',
-        });
-      }
+
+    if (user.role === "buyer" && req.query.isWebAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied for buyers on Web Admin.',
+      });
     }
 
     return res.status(200).json({
