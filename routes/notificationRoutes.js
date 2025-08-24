@@ -16,7 +16,7 @@ router.delete('/notifications/:id', deleteNotification);
 
 router.get('/notifications-global', getGlobalNotifications);
 
-router.get('/notifications/users-with-notifications', getUsersWithNotifications);
+router.get('/users-with-notifications', getUsersWithNotifications);
 
 
 module.exports = router;

@@ -34,7 +34,7 @@ const User = sequelize.define('Users', {
   googleId: { type: DataTypes.STRING, allowNull: true },
   phone: { type: DataTypes.STRING },
   role: {
-    type: DataTypes.ENUM("buyer", "admin", "superAdmin"),
+    type: DataTypes.ENUM("buyer", "admin", "superAdmin", "cashier", "stock", "deliver"),
     allowNull: false,
     defaultValue: "buyer"
   },
