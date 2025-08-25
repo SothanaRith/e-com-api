@@ -26,6 +26,7 @@ const deliveryAddressRoutes = require("./routes/deliveryAddressRoutes");
 const adminNotification = require("./config/firebase_admin");
 const paymentRoutes = require('./routes/paymentRoutes');
 const notificationRoutes = require('./routes/notificationRoutes'); // Import the notification routes
+const historyRoutes = require("./routes/historyRoutes");
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use("/api/permission", permissionRoute);
 app.use("/api/delivery-addresses", deliveryAddressRoutes);
 app.use("/api/notification", notificationRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use("/api/history", historyRoutes);
 
 // Create an HTTP server and bind Socket.IO
 const server = http.createServer(app);

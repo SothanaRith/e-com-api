@@ -1920,15 +1920,17 @@ exports.getOrdersByUserAndStatus = async (req, res) => {
             }
         }));
 
-        return res.status(200).json({
-            orders: formattedOrders,
-            pagination: {
-                total: totalCount,
-                page: parseInt(page),
-                totalPages,
-                itemsPerPage: limit
-            }
-        });
+        return res.status(200).json(formattedOrders);
+
+        // return res.status(200).json({
+        //     orders: formattedOrders,
+        //     pagination: {
+        //         total: totalCount,
+        //         page: parseInt(page),
+        //         totalPages,
+        //         itemsPerPage: limit
+        //     }
+        // });
 
     } catch (error) {
         console.error('Error fetching orders by user and status:', error);
