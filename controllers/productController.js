@@ -342,105 +342,91 @@ exports.updateProduct = async (req, res) => {
 
 exports.getProductById = async (req, res) => {
     try {
-        const { id } = req.params;
-
-        // userId is optional: accept from params OR query
-        const rawUserId = req.params.userId ?? req.query.userId ?? null;
-        const userId = rawUserId && /^\d+$/.test(String(rawUserId)) ? Number(rawUserId) : null;
-
-        if (!id || Number.isNaN(Number(id))) {
-            return res.status(400).json(failResponse("Invalid product ID"));
-        }
-
-        // Build conditional user includes
-        const userIncludes = userId
-            ? [
-                {
-                    model: Wishlist,
-                    as: 'Wishlists',
-                    where: { userId },
-                    attributes: ['id'],
-                    required: false,
-                },
-                {
-                    model: Cart,
-                    as: 'Carts',              // ensure this matches your association alias
-                    where: { userId },
-                    attributes: ['quantity'],
-                    required: false,
-                },
-            ]
-            : [];
+        const { id, userId } = req.params;
 
         const product = await Product.findByPk(id, {
             include: [
-                { model: Category, attributes: { exclude: [] }, required: false },
+                { model: Category, attributes: { exclude: [] } },
                 {
                     model: Variant,
                     attributes: { exclude: [] },
-                    required: false,
-                    include: [
-                        { model: VariantAttribute, attributes: ['name', 'value'], required: false },
-                    ],
+                    include: [{ model: VariantAttribute, attributes: ['name', 'value'] }]
                 },
                 {
                     model: Review,
                     attributes: ['id', 'rating', 'comment', 'userId', 'imageUrl'],
                     required: false,
-                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'], required: false }],
+                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'] }]
                 },
                 {
                     model: Product,
                     as: 'RelatedProducts',
                     attributes: ['id', 'name', 'price', 'imageUrl', 'totalStock'],
-                    through: { attributes: [] },
-                    required: false,
+                    through: { attributes: [] }
                 },
-                ...userIncludes,
-            ],
+                ...(userId ? [{
+                    model: Wishlist,
+                    as: 'Wishlists',
+                    where: { userId },
+                    attributes: ['id'],
+                    required: false
+                }] : []),
+                ...(userId ? [{
+                    model: Cart,
+                    where: { userId },
+                    attributes: ['quantity'],
+                    required: false
+                }] : [])
+            ]
         });
 
-        if (!product) {
-            return res.status(404).json(failResponse("Product not found"));
-        }
+        if (!product) return res.status(404).json({ message: "Product not found" });
 
         const prod = product.toJSON();
 
-        // Category
         prod.category = prod.Category || null;
         delete prod.Category;
 
-        // Parse main product imageUrl if stored as JSON string
+        // Parse imageUrl of main product
         if (typeof prod.imageUrl === 'string') {
             try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch { prod.imageUrl = []; }
         }
 
         // Wishlist flag
-        prod.isInWishlist = userId ? (prod.Wishlists?.length > 0) : false;
+        prod.isInWishlist = userId ? prod.Wishlists?.length > 0 : false;
         delete prod.Wishlists;
 
         // Cart info
         if (userId) {
-            const hasCart = Array.isArray(prod.Carts) && prod.Carts.length > 0;
-            prod.isInCart = hasCart;
-            prod.cartQuantity = hasCart ? prod.Carts[0].quantity : 0;
+            if (prod.Carts && prod.Carts.length > 0) {
+                prod.isInCart = true;
+                prod.cartQuantity = prod.Carts[0].quantity;
+            } else {
+                prod.isInCart = false;
+                prod.cartQuantity = 0;
+            }
             delete prod.Carts;
         }
 
-        // Parse imageUrl for related products when saved as JSON string
-        if (Array.isArray(prod.RelatedProducts)) {
-            prod.RelatedProducts = prod.RelatedProducts.map(rp => {
-                if (typeof rp.imageUrl === 'string') {
-                    try { rp.imageUrl = JSON.parse(rp.imageUrl); } catch { rp.imageUrl = []; }
+        // Parse imageUrl for related products
+        if (prod.RelatedProducts && Array.isArray(prod.RelatedProducts)) {
+            prod.RelatedProducts = prod.RelatedProducts.map(relProd => {
+                if (typeof relProd.imageUrl === 'string') {
+                    try {
+                        relProd.imageUrl = JSON.parse(relProd.imageUrl);
+                    } catch {
+                        relProd.imageUrl = [];
+                    }
                 }
-                return rp;
+                return relProd;
             });
         }
 
-        return res.status(200).json(successResponse("Product fetched successfully", prod));
+        return res.status(200).json(prod);
+
     } catch (error) {
         console.error("Error fetching product:", error);
-        return res.status(500).json(failResponse("Internal server error", error.message));
+        res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
 
