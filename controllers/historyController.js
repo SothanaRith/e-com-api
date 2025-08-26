@@ -53,13 +53,10 @@ const getSearchHistoryByUser = async (req, res) => {
 
 const getProductHistoryByUser = async (req, res) => {
   try {
-    // userId from params or query
     const rawUserId = req.params.userId ?? req.query.userId ?? null;
     const userId = rawUserId && /^\d+$/.test(String(rawUserId)) ? Number(rawUserId) : null;
-
     if (!userId) return res.status(400).json({ success: false, message: "Invalid user ID" });
 
-    // Fetch all product visit history for the user
     const history = await ProductVisitHistory.findAll({
       where: { userId },
       include: [
@@ -99,42 +96,50 @@ const getProductHistoryByUser = async (req, res) => {
               where: { userId },
               attributes: ['quantity'],
               required: false,
-            }
+            },
           ],
         },
       ],
-      order: [["createdAt", "DESC"]],
+      order: [["createdAt", "DESC"]], // latest first so we keep newest per product
     });
 
-    // Transform data like getProductById
-    const result = history.map(h => {
-      if (!h.Product) return null;
-      const prod = h.Product.toJSON();
+    // Transform like getProductById
+    const transformed = history
+        .map(h => {
+          if (!h.Product) return null;
+          const prod = h.Product.toJSON();
 
-      // Category
-      prod.category = prod.Category || null;
-      delete prod.Category;
+          prod.category = prod.Category || null;
+          delete prod.Category;
 
-      // Wishlist flag
-      prod.isInWishlist = prod.Wishlists?.length > 0;
-      delete prod.Wishlists;
+          prod.isInWishlist = !!(prod.Wishlists && prod.Wishlists.length);
+          delete prod.Wishlists;
 
-      // Cart info
-      if (prod.Carts) {
-        prod.isInCart = prod.Carts.length > 0;
-        prod.cartQuantity = prod.Carts.length > 0 ? prod.Carts[0].quantity : 0;
-        delete prod.Carts;
-      }
+          if (prod.Carts) {
+            prod.isInCart = prod.Carts.length > 0;
+            prod.cartQuantity = prod.Carts.length > 0 ? prod.Carts[0].quantity : 0;
+            delete prod.Carts;
+          }
 
-      // Parse imageUrl if string
-      if (typeof prod.imageUrl === 'string') {
-        try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch { prod.imageUrl = []; }
-      }
+          if (typeof prod.imageUrl === 'string') {
+            try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch { prod.imageUrl = []; }
+          }
 
-      return { ...h.toJSON(), Product: prod };
-    }).filter(Boolean);
+          return { ...h.toJSON(), Product: prod };
+        })
+        .filter(Boolean);
 
-    return res.status(200).json({ success: true, history: result });
+    // 🔑 De-duplicate by Product.id, keeping the first (latest) visit
+    const seen = new Set();
+    const uniqueByProduct = transformed.filter(item => {
+      const pid = item.Product?.id;
+      if (!pid) return false;
+      if (seen.has(pid)) return false;
+      seen.add(pid);
+      return true;
+    });
+
+    return res.status(200).json({ success: true, history: uniqueByProduct });
   } catch (error) {
     console.error("Error fetching product history:", error);
     return res.status(500).json({ success: false, message: error.message });
