@@ -4,19 +4,66 @@ const qrcode = require('qrcode');
 const axios = require('axios');
 const Jimp = require('jimp');
 
-const generateDeeplink = async (req, res) => {
-    try {
-        const { qrCode, appIconUrl, appName, appDeepLinkCallback } = req.body;
+const BAKONG_TOKEN = process.env.BAKONG_TOKEN; // REQUIRED
+const APP_DEEPLINK_SCHEME = process.env.APP_DEEPLINK_SCHEME || 'snapbuy';
+const APP_DEEPLINK_HOST = process.env.APP_DEEPLINK_HOST || 'payment-callback';
 
-        // Call the service that generates the QR code and deeplink
-        const result = await generateDeepLinkKHQR(qrCode, appIconUrl, appName, appDeepLinkCallback);
+if (!BAKONG_TOKEN) {
+  console.warn('[paymentController] WARNING: BAKONG_TOKEN missing. Set it in .env');
+}
 
-        // Return the deeplink result to the frontend
-        res.json(result);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+async function generateDeeplink(req, res) {
+  try {
+    const { qrCode, appIconUrl, appName, appDeepLinkCallback } = req.body || {};
+
+    if (!qrCode || !appIconUrl || !appName || !appDeepLinkCallback) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: qrCode, appIconUrl, appName, appDeepLinkCallback',
+      });
     }
-};
+
+    // Optional: generate a PNG data URL to show QR preview on your frontend
+    const qrImage = await qrcode.toDataURL(qrCode);
+
+    const payload = {
+      // IMPORTANT: Bakong expects the raw KHQR string here (NOT PNG)
+      qr: qrCode,
+      sourceInfo: {
+        appIconUrl,
+        appName,
+        appDeepLinkCallback, // e.g. https://your-api.example.com/payment/callback
+      },
+    };
+
+    const r = await bakong.post('/generate_deeplink_by_qr', payload, {
+      headers: {
+        Authorization: `Bearer ${BAKONG_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log('🔗 Generated deeplink:', r.data);
+
+    return res.json({
+      success: true,
+      ...r.data,          // deeplink, reference, etc. from Bakong
+      qrImage,            // optional PNG data URL for UI preview
+    });
+  } catch (err) {
+    const msg = err.response?.data || err.message || 'Unknown error';
+    return res.status(500).json({
+      success: false,
+      message: `Error generating KHQR deeplink: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`,
+    });
+  }
+}
+
+// Preconfigured axios client
+const bakong = axios.create({
+  baseURL: 'https://api-bakong.nbc.gov.kh/v1',
+  timeout: 10000,
+});
 
 // Constants
 const ACCESS_TOKEN = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7ImlkIjoiMzM0NDUzY2M0ZWYzNDAyYiJ9LCJpYXQiOjE3NTAwNTAyODgsImV4cCI6MTc1NzgyNjI4OH0.ECXxWWzlS3pN9Jq_5GmZZXKKyvPbx1KSJIhhdeWKTo4';

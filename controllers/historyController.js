@@ -100,39 +100,44 @@ const getProductHistoryByUser = async (req, res) => {
           ],
         },
       ],
-      order: [["createdAt", "DESC"]], // latest first so we keep newest per product
+      order: [["createdAt", "DESC"]],
     });
 
-    // Transform like getProductById
+    // Transform like getProductById — but expose "product" (lowercase) in response
     const transformed = history
-        .map(h => {
-          if (!h.Product) return null;
-          const prod = h.Product.toJSON();
+      .map(h => {
+        if (!h.Product) return null;
+        const prod = h.Product.toJSON();
 
-          prod.category = prod.Category || null;
-          delete prod.Category;
+        // normalize fields
+        prod.category = prod.Category || null;
+        delete prod.Category;
 
-          prod.isInWishlist = !!(prod.Wishlists && prod.Wishlists.length);
-          delete prod.Wishlists;
+        prod.isInWishlist = !!(prod.Wishlists && prod.Wishlists.length);
+        delete prod.Wishlists;
 
-          if (prod.Carts) {
-            prod.isInCart = prod.Carts.length > 0;
-            prod.cartQuantity = prod.Carts.length > 0 ? prod.Carts[0].quantity : 0;
-            delete prod.Carts;
-          }
+        if (prod.Carts) {
+          prod.isInCart = prod.Carts.length > 0;
+          prod.cartQuantity = prod.Carts.length > 0 ? prod.Carts[0].quantity : 0;
+          delete prod.Carts;
+        }
 
-          if (typeof prod.imageUrl === 'string') {
-            try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch { prod.imageUrl = []; }
-          }
+        if (typeof prod.imageUrl === 'string') {
+          try { prod.imageUrl = JSON.parse(prod.imageUrl); } catch { prod.imageUrl = []; }
+        }
 
-          return { ...h.toJSON(), Product: prod };
-        })
-        .filter(Boolean);
+        // return with "product" key; strip original "Product" to avoid duplication
+        const base = h.toJSON();
+        delete base.Product;
 
-    // 🔑 De-duplicate by Product.id, keeping the first (latest) visit
+        return { ...base, product: prod };
+      })
+      .filter(Boolean);
+
+    // 🔑 De-duplicate by product.id, keeping the first (latest) visit
     const seen = new Set();
     const uniqueByProduct = transformed.filter(item => {
-      const pid = item.Product?.id;
+      const pid = item.product?.id;
       if (!pid) return false;
       if (seen.has(pid)) return false;
       seen.add(pid);
