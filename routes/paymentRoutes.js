@@ -18,4 +18,8 @@ router.post('/verify', khqrController.verifyKHQR);
 router.post('/decode', khqrController.decodeKHQR);
 router.post('/renew-token', khqrController.renewToken);
 router.get('/payment-callback', paymentController.handlePaymentCallback);
+
+router.post('/stream-status', paymentController.checkStreamTransactionStatus);
+router.get('/callback', paymentController.handlePaymentCallback);
+
 module.exports = router;
